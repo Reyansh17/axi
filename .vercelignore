@@ -1,5 +1,5 @@
 # Only the slide deck and its config should be deployed.
 # Everything else here (source docs, builds, backups) stays private.
 *
-!AXI_Module1_Slides.html
+!index.html
 !vercel.json

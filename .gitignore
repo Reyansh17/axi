@@ -3,7 +3,7 @@
 # screenshots, temp ~$ files, OS cruft) stays private.
 *
 
-!AXI_Module1_Slides.html
+!index.html
 !vercel.json
 !.vercelignore
 !.gitignore
