@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AXI Protocol · Module 1 — ElectronicBit</title>
+<style>
+/* ============================================================
+   ELECTRONICBIT · AXI MODULE 1  ·  Teaching deck
+   Design system + slide engine
+   Channel color language:
+     Write request (AW) / Write data (W) ... BLUE
+     Write response (B) .................... GREEN
+     Read request (AR) / Read data (R) ..... PURPLE
+   ============================================================ */
+:root{
+  --bg:#0b1020;            /* deep navy base            */
+  --bg2:#0f1630;           /* panel base                */
+  --ink:#eef2ff;           /* primary text              */
+  --ink-dim:#9aa6c7;       /* secondary text            */
+  --ink-faint:#5d6890;     /* tertiary text             */
+  --line:#23304f;          /* hairlines                 */
+  --brand:#36c5f0;         /* ElectronicBit cyan accent */
+  --brand-2:#7c5cff;       /* secondary accent          */
+
+  /* channel palette */
+  --aw:#3b82f6;  --aw-soft:#13213f;  --aw-ink:#bcd6ff;   /* write addr  */
+  --w :#60a5fa;  --w-soft:#152546;   --w-ink:#cfe2ff;    /* write data  */
+  --b :#10b981;  --b-soft:#0d2b22;   --b-ink:#9af0d2;    /* write resp  */
+  --ar:#a78bfa;  --ar-soft:#1d1840;  --ar-ink:#d8ccff;   /* read addr   */
+  --r :#c084fc;  --r-soft:#251843;   --r-ink:#e7d4ff;    /* read data   */
+
+  --good:#10b981; --bad:#f43f5e;
+  --radius:18px;
+  --font:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+
+  /* ---- camera layout : reserve right third for talking-head ---- */
+  --cam-w:34%;     /* width of the camera zone on the right        */
+  --cscale:.66;    /* content scales into the left ~66%            */
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--ink);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- stage : fixed 16:9 that scales to viewport ---------- */
+#stage{
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:
+    radial-gradient(1200px 700px at 78% -10%, #15203f 0%, transparent 55%),
+    radial-gradient(1000px 650px at 12% 110%, #161033 0%, transparent 55%),
+    var(--bg);
+}
+#deck{
+  position:relative;
+  width:100vw; height:56.25vw;        /* 16:9 */
+  max-height:100vh; max-width:177.78vh;
+  overflow:hidden;
+}
+
+/* ---------- slides ---------- */
+.slide{
+  position:absolute; inset:0;
+  padding:5.2% 6.4%;
+  display:none;
+  flex-direction:column;
+  opacity:0;
+}
+.slide.active{ display:flex; opacity:1; animation:slideIn .5s ease both; }
+@keyframes slideIn{ from{opacity:0; transform:translateY(14px) scale(.992)} to{opacity:1; transform:none} }
+
+/* ---- camera layout : content shrinks into the left, right third free ---- */
+.cam-wrap{
+  position:relative; width:100%; height:100%;
+  display:flex; flex-direction:column; justify-content:center;
+  transform:scale(var(--cscale)); transform-origin:left center;
+}
+/* camera-zone guide (toggle with C) */
+.cam-guide{
+  position:fixed; top:0; right:0; height:100%; width:var(--cam-w);
+  z-index:40; pointer-events:none;
+  border-left:2px dashed rgba(54,197,240,.35);
+  background:linear-gradient(90deg,rgba(54,197,240,.04),rgba(54,197,240,.08));
+  display:flex; align-items:flex-start; justify-content:center;
+}
+.cam-guide::before{
+  content:"CAMERA"; margin-top:2.2vh;
+  font:700 1vw/1 var(--mono); letter-spacing:.3em;
+  color:rgba(54,197,240,.5);
+}
+body.cam-off .cam-guide{ display:none; }
+
+/* ---- speaker-notes teleprompter (lives in the camera zone) ---- */
+.snote-panel{
+  position:fixed; top:0; right:0; height:100%; width:var(--cam-w);
+  z-index:45; display:flex; flex-direction:column;
+  background:linear-gradient(180deg,#0a0f1f,#0c1226);
+  border-left:1px solid var(--line);
+  padding:5.5vh 1.6vw 2.2vh;
+  overflow:hidden;
+}
+.snote-tag{
+  display:flex; align-items:center; gap:.6em;
+  font:700 .9vw/1 var(--mono); letter-spacing:.22em; text-transform:uppercase;
+  color:#ff8585; margin-bottom:1.3vh; flex:none;
+}
+.snote-tag::before{ content:""; width:.7vw; height:.7vw; border-radius:50%; background:#ff5252; box-shadow:0 0 10px #ff5252; animation:rec 1.4s ease-in-out infinite; }
+@keyframes rec{ 50%{opacity:.3} }
+.snote-body{
+  flex:1; overflow-y:auto;
+  font:400 1.18vw/1.62 var(--font); color:#cdd6f0;
+}
+.snote-body strong{ color:#fff; font-weight:700; }
+.snote-body em{ color:#ffd27a; font-style:normal; font-weight:600; }   /* hook / emphasis */
+.snote-body .cue{ display:block; margin-top:1vh; font:600 .92vw/1.4 var(--mono); color:#7c89b0; }
+.snote-body::-webkit-scrollbar{ width:6px; }
+.snote-body::-webkit-scrollbar-thumb{ background:#2a3756; border-radius:3px; }
+body.notes-off .snote-panel{ display:none; }
+/* when notes are on, the camera guide is redundant */
+body:not(.notes-off) .cam-guide{ display:none; }
+
+/* entrance animation for child elements */
+[data-anim]{ opacity:0; transform:translateY(18px); }
+.slide.active [data-anim]{ animation:rise .6s cubic-bezier(.2,.7,.3,1) both; }
+.slide.active [data-anim]{ animation-delay:calc(var(--d,0) * 90ms); }
+@keyframes rise{ to{opacity:1; transform:none} }
+
+/* ---------- typography ---------- */
+.kicker{
+  font:600 1.15vw/1 var(--mono);
+  letter-spacing:.28em; text-transform:uppercase;
+  color:var(--brand);
+  display:flex; align-items:center; gap:.7em;
+}
+.kicker::before{ content:""; width:2.4vw; height:2px; background:var(--brand); display:inline-block; }
+h1{ font-size:5.6vw; line-height:1.02; font-weight:800; letter-spacing:-.02em; }
+h2{ font-size:3.4vw; line-height:1.05; font-weight:800; letter-spacing:-.015em; }
+h3{ font-size:1.9vw; font-weight:700; }
+p,li{ font-size:1.55vw; line-height:1.5; color:var(--ink-dim); }
+.lead{ font-size:1.95vw; color:var(--ink); line-height:1.45; }
+strong{ color:var(--ink); font-weight:700; }
+.accent{ color:var(--brand); }
+
+/* ---------- title slide ---------- */
+.title-wrap{ height:100%; display:flex; flex-direction:column; justify-content:center; gap:2.4vw; }
+.brandbar{ display:flex; align-items:center; gap:1vw; }
+.logo{
+  width:3.2vw; height:3.2vw; border-radius:10px;
+  background:linear-gradient(135deg,var(--brand),var(--brand-2));
+  display:grid; place-items:center; font-weight:900; color:#06101f; font-size:1.7vw;
+  box-shadow:0 0 0 4px rgba(54,197,240,.12);
+}
+.brandname{ font-weight:800; font-size:1.5vw; letter-spacing:.02em; }
+.title-meta{ display:flex; gap:.8vw; flex-wrap:wrap; margin-top:.6vw; }
+.chip{
+  font:600 1.05vw/1 var(--mono);
+  padding:.7em 1.1em; border-radius:999px;
+  background:var(--bg2); border:1px solid var(--line); color:var(--ink-dim);
+}
+.chip.lvl{ color:var(--brand); border-color:rgba(54,197,240,.35); background:rgba(54,197,240,.08); }
+
+/* ---------- agenda ---------- */
+.agenda{ display:flex; flex-direction:column; gap:1.4vw; margin-top:2.4vw; }
+.agenda-row{
+  display:flex; align-items:center; gap:1.6vw;
+  padding:1.5vw 1.8vw; border-radius:var(--radius);
+  background:linear-gradient(90deg,var(--bg2),transparent);
+  border:1px solid var(--line);
+  border-left:4px solid var(--accent-c,var(--brand));
+}
+.agenda-num{
+  font:800 1.8vw/1 var(--mono); color:var(--accent-c,var(--brand));
+  width:3vw; flex:none;
+}
+.agenda-txt h3{ margin-bottom:.25vw; }
+.agenda-txt p{ font-size:1.25vw; }
+
+/* ---------- chrome : progress, counter, hint ---------- */
+#progress{ position:fixed; top:0; left:0; height:4px; background:linear-gradient(90deg,var(--brand),var(--brand-2)); width:0; z-index:50; transition:width .4s ease; }
+#counter{
+  position:fixed; bottom:2.2vh; right:calc(var(--cam-w) + 2vw); z-index:50;
+  font:600 1.1vw/1 var(--mono); color:var(--ink-faint);
+}
+#counter b{ color:var(--ink); }
+#dots{ position:fixed; bottom:2.2vh; left:calc((100% - var(--cam-w))/2); transform:translateX(-50%); z-index:50; display:flex; gap:.55vw; }
+.dot{ width:.72vw; height:.72vw; border-radius:50%; background:var(--line); cursor:pointer; transition:.25s; }
+.dot:hover{ transform:scale(1.25); background:var(--ink-faint); }
+.dot.on{ background:var(--brand); width:2.2vw; border-radius:999px; }
+#hint{
+  position:fixed; bottom:2.2vh; left:2.4vw; z-index:50;
+  font:500 1vw/1 var(--mono); color:var(--ink-faint);
+  display:flex; gap:1.1vw; align-items:center;
+}
+kbd{
+  font:600 .92vw/1 var(--mono); color:var(--ink-dim);
+  background:var(--bg2); border:1px solid var(--line);
+  border-bottom-width:2px; border-radius:6px; padding:.45em .6em;
+}
+.section-tag{
+  position:absolute; top:5.2%; right:calc(var(--cam-w) + 2vw);
+  z-index:5;
+  font:600 1vw/1 var(--mono); letter-spacing:.2em; text-transform:uppercase;
+  color:var(--ink-faint);
+}
+.mono{ font-family:var(--mono); }
+
+/* ---------- section divider ---------- */
+.divider{ justify-content:center; }
+.div-wrap{ display:flex; align-items:center; gap:3.5vw; }
+.div-num{
+  font:900 13vw/.8 var(--mono);
+  color:transparent; -webkit-text-stroke:2px var(--sc,var(--brand));
+  opacity:.85;
+}
+.div-title{ margin:.5vw 0 1vw; }
+
+/* ---------- quote block ---------- */
+.quote{
+  margin-top:auto; display:flex; gap:1.4vw; align-items:flex-start;
+  background:linear-gradient(90deg,rgba(54,197,240,.08),transparent);
+  border-left:4px solid var(--brand);
+  border-radius:0 14px 14px 0;
+  padding:1.8vw 2.2vw; max-width:82%;
+  font-size:1.7vw; line-height:1.45; color:var(--ink); font-style:italic;
+}
+.quote-mark{ font:900 5vw/1 Georgia,serif; color:var(--brand); margin-top:-.6vw; }
+.quote-src{ display:block; margin-top:.8vw; font-style:normal; font:600 1.1vw/1 var(--mono); color:var(--ink-faint); }
+
+/* ---------- split (bottleneck vs fix) ---------- */
+.split{ display:flex; align-items:stretch; gap:1.6vw; margin-top:1.8vw; flex:1; }
+.split-col{ flex:1; display:flex; }
+.split-arrow{ align-self:center; font-size:3vw; color:var(--brand); font-weight:800; }
+.card{
+  flex:1; border-radius:var(--radius); padding:1.8vw 1.9vw;
+  background:var(--bg2); border:1px solid var(--line);
+  display:flex; flex-direction:column; gap:1vw;
+}
+.card h3{ font-size:1.7vw; }
+.card-bad{ border-color:rgba(244,63,94,.4); background:linear-gradient(180deg,rgba(244,63,94,.07),var(--bg2)); }
+.card-good{ border-color:rgba(54,197,240,.4); background:linear-gradient(180deg,rgba(54,197,240,.08),var(--bg2)); }
+
+.latency-demo{ display:flex; flex-direction:column; gap:1vw; margin-top:.4vw; }
+.lat-row{ display:flex; align-items:center; gap:1vw; }
+.lat-lbl{ font:600 1vw/1.2 var(--mono); color:var(--ink-dim); width:11vw; flex:none; }
+.lat-track{ flex:1; height:1.1vw; background:#0a1124; border-radius:999px; overflow:hidden; }
+.lat-fill{ display:block; height:100%; border-radius:999px; }
+.lat-fill.ok{ background:linear-gradient(90deg,#10b981,#34d399); }
+.lat-fill.bad{ background:linear-gradient(90deg,#f43f5e,#fb7185); animation:pulseBad 1.6s ease-in-out infinite; }
+@keyframes pulseBad{ 50%{opacity:.55} }
+.lat-tag{ font:700 .95vw/1 var(--mono); }
+.lat-tag.ok{ color:var(--good); } .lat-tag.bad{ color:var(--bad); }
+
+.decouple{ display:flex; flex-direction:column; gap:.8vw; margin:.4vw 0; }
+.dc-lane{ display:flex; align-items:center; gap:1vw; }
+.dc-tag{ font:700 .9vw/1 var(--mono); padding:.5em .8em; border-radius:7px; border:1px solid; width:7vw; text-align:center; flex:none; }
+.dc-flow{ flex:1; height:1.4vw; border-radius:999px; background:#0a1124; position:relative; overflow:hidden; }
+.dc-flow i{ position:absolute; top:50%; width:1.4vw; height:1.4vw; border-radius:50%; transform:translateY(-50%); background:var(--aw); animation:flow 1.8s linear infinite; }
+.dc-flow.slow i{ background:var(--w); animation-duration:2.8s; }
+.dc-flow i:nth-child(2){ animation-delay:.6s } .dc-flow i:nth-child(3){ animation-delay:1.2s }
+.dc-flow.slow i:nth-child(2){ animation-delay:1.4s }
+@keyframes flow{ from{left:-10%} to{left:110%} }
+
+/* ---------- roles ---------- */
+.roles{ display:flex; align-items:center; gap:1.4vw; margin-top:1.6vw; }
+.role-card{
+  flex:1; border-radius:var(--radius); padding:1.7vw 1.8vw;
+  background:var(--bg2); border:1px solid var(--line); border-top:4px solid var(--rc);
+  display:flex; flex-direction:column; gap:.8vw;
+}
+.role-head{ display:flex; align-items:center; gap:1vw; }
+.role-icon{ width:2.8vw; height:2.8vw; flex:none; border-radius:10px; display:grid; place-items:center; font-size:1.3vw; color:#06101f; background:var(--rc); }
+.role-old{ font:600 1vw/1 var(--mono); color:var(--ink-faint); }
+.role-ex{ font:600 1.15vw/1.3 var(--mono); color:var(--rc); background:rgba(255,255,255,.03); border-radius:10px; padding:.9vw 1.1vw; }
+.role-wire{ display:flex; flex-direction:column; align-items:center; gap:.5vw; flex:none; }
+.role-wire span{ font:600 .92vw/1 var(--mono); color:var(--ink-faint); }
+.role-wire .wire{ width:6vw; height:3px; background:linear-gradient(90deg,var(--aw),var(--b),var(--ar)); border-radius:2px; position:relative; }
+.role-wire .wire::after{ content:""; position:absolute; top:50%; left:0; width:1vw; height:1vw; background:var(--brand); border-radius:50%; transform:translateY(-50%); animation:flow 2s linear infinite; }
+
+.note{
+  margin-top:auto; font-size:1.25vw; line-height:1.45; color:var(--ink-dim);
+  background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:1.2vw 1.5vw;
+}
+
+/* ---------- feature grid ---------- */
+.feat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:1vw 1.6vw; margin-top:1.6vw; flex:1; align-content:center; }
+.feat{ display:flex; gap:1.1vw; align-items:flex-start; padding:1vw 1.2vw; border-radius:12px; background:var(--bg2); border:1px solid var(--line); }
+.feat-i{ width:2.4vw; height:2.4vw; flex:none; border-radius:9px; display:grid; place-items:center; font-size:1.3vw; color:var(--brand); background:rgba(54,197,240,.1); }
+.feat b{ font-size:1.3vw; color:var(--ink); }
+.feat p{ font-size:1.05vw; margin-top:.2vw; }
+.feat-hl{ border-color:rgba(124,92,255,.45); background:linear-gradient(180deg,rgba(124,92,255,.1),var(--bg2)); }
+.feat-hl .feat-i{ color:var(--brand-2); background:rgba(124,92,255,.16); }
+
+/* ---------- five-channel map ---------- */
+.chmap{ display:flex; align-items:stretch; gap:1.1vw; margin-top:1.4vw; flex:1; }
+.chmap-node{
+  flex:none; width:8.6vw; border-radius:var(--radius);
+  background:var(--bg2); border:1px solid var(--line);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.6vw;
+  padding:1.4vw .8vw;
+}
+.chmap-node.mgr{ border-left:4px solid var(--aw); }
+.chmap-node.sub{ border-right:4px solid var(--b); }
+.chmap-node .node-icon{ width:3.4vw; height:3.4vw; border-radius:12px; display:grid; place-items:center; font-size:1.6vw; color:#06101f; background:linear-gradient(135deg,var(--brand),var(--brand-2)); }
+.chmap-node b{ font-size:1.5vw; }
+.chmap-node small{ font:600 1vw/1 var(--mono); color:var(--ink-faint); }
+
+.chmap-lanes{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:.85vw; }
+.ch-lane{
+  display:grid; grid-template-columns:3.2vw 1fr auto; grid-template-rows:auto auto;
+  align-items:center; column-gap:1vw;
+  background:color-mix(in srgb, var(--c) 8%, var(--bg2));
+  border:1px solid color-mix(in srgb, var(--c) 35%, var(--line));
+  border-radius:12px; padding:.7vw 1vw;
+}
+.ch-badge{
+  grid-row:1/3; align-self:center;
+  width:3.2vw; height:3.2vw; border-radius:9px; display:grid; place-items:center;
+  font:800 1.3vw/1 var(--mono); color:#06101f; background:var(--c);
+}
+.ch-line{ position:relative; height:.55vw; background:rgba(255,255,255,.06); border-radius:999px; }
+.ch-line i{ position:absolute; top:50%; width:1vw; height:1vw; border-radius:50%; transform:translateY(-50%); background:var(--c); box-shadow:0 0 12px var(--c); animation:flow 2.4s linear infinite; }
+.ch-line i:nth-child(2){ animation-delay:.8s } .ch-line i:nth-child(3){ animation-delay:1.6s }
+.ch-lane.rev .ch-line i{ animation-name:flowRev; }
+@keyframes flowRev{ from{left:110%} to{left:-10%} }
+.ch-dir{ grid-column:3; grid-row:1; font:700 1vw/1 var(--mono); color:var(--c); white-space:nowrap; }
+.ch-desc{ grid-column:2/4; grid-row:2; font-size:1vw; color:var(--ink-dim); margin-top:.25vw; }
+
+.legend{ display:flex; gap:1.8vw; justify-content:center; margin-top:1.2vw; }
+.legend span{ display:flex; align-items:center; gap:.5vw; font:600 1.05vw/1 var(--mono); color:var(--ink-dim); }
+.legend i{ width:1vw; height:1vw; border-radius:3px; display:inline-block; }
+
+/* ---------- writes=3 reads=2 ---------- */
+.wr-split{ display:flex; gap:1.6vw; margin-top:1.6vw; }
+.wr-card{ flex:1; border-radius:var(--radius); background:var(--bg2); border:1px solid var(--line); border-top:4px solid var(--wc); padding:1.7vw 1.9vw; display:flex; flex-direction:column; gap:1.1vw; }
+.wr-card h3{ font-size:1.5vw; color:var(--wc); }
+.wr-chans{ display:flex; gap:1vw; }
+.wr-chip{ width:4vw; height:4vw; border-radius:12px; display:grid; place-items:center; font:800 1.5vw/1 var(--mono); color:#06101f; background:var(--cc); }
+.wr-card p{ font-size:1.35vw; }
+
+.note.crit{ border-color:rgba(244,63,94,.4); background:linear-gradient(90deg,rgba(244,63,94,.1),var(--bg2)); display:flex; flex-direction:column; gap:.5vw; }
+.crit-tag{ font:700 1.05vw/1 var(--mono); color:var(--bad); }
+
+/* ---------- flow (write/read sequence) ---------- */
+.flow{ display:flex; gap:1vw; margin-top:1.8vw; flex:1; align-items:center; }
+.flow.vert{ flex-direction:column; align-items:stretch; flex:none; margin-top:1vw; }
+.flow-step{ flex:1; position:relative; border-radius:var(--radius); background:var(--bg2); border:1px solid var(--line); border-top:4px solid var(--fc); padding:1.6vw 1.5vw 1.4vw; display:flex; flex-direction:column; gap:.7vw; }
+.flow.vert .flow-step{ flex-direction:row; align-items:center; gap:1.2vw; border-top:1px solid var(--line); border-left:4px solid var(--fc); }
+.flow.vert .flow-step p{ margin:0; }
+.flow-n{ position:absolute; top:-1.3vw; right:1.2vw; width:2.6vw; height:2.6vw; border-radius:50%; background:var(--fc); color:#06101f; font:800 1.4vw/1 var(--mono); display:grid; place-items:center; }
+.flow.vert .flow-n{ position:static; flex:none; }
+.flow-badge{ width:3.4vw; height:3.4vw; border-radius:10px; background:color-mix(in srgb,var(--fc) 18%,var(--bg2)); border:1px solid var(--fc); color:var(--fc); font:800 1.5vw/1 var(--mono); display:grid; place-items:center; }
+.flow-step p{ font-size:1.3vw; }
+.flow-join{ font-size:2.4vw; color:var(--ink-faint); align-self:center; flex:none; }
+
+/* ---------- two-up panels ---------- */
+.two-up{ display:flex; gap:1.6vw; margin-top:1.4vw; flex:1; }
+.panel{ flex:1; border-radius:var(--radius); background:var(--bg2); border:1px solid var(--line); padding:1.7vw 1.8vw; display:flex; flex-direction:column; }
+.panel h3{ font-size:1.5vw; margin-bottom:.4vw; }
+.sig-row{ display:flex; flex-wrap:wrap; gap:.7vw; }
+.sig{ font:700 1.15vw/1 var(--mono); padding:.55em .8em; border-radius:8px; background:rgba(255,255,255,.04); border:1px solid color-mix(in srgb,var(--sc,var(--brand)) 40%,var(--line)); color:var(--sc,var(--ink)); }
+.ax-demo{ display:flex; align-items:center; gap:.8vw; flex-wrap:wrap; }
+.ax-pill{ font:800 1.3vw/1 var(--mono); padding:.6em .9em; border-radius:9px; background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#06101f; }
+.ax-eq,.ax-amp{ font:700 1.4vw/1 var(--mono); color:var(--ink-faint); }
+
+/* ---------- interconnect topologies ---------- */
+.topo-grid{ display:flex; gap:1.4vw; margin-top:1.6vw; flex:1; }
+.topo{ flex:1; border-radius:var(--radius); background:var(--bg2); border:1px solid var(--line); padding:1.6vw 1.5vw; display:flex; flex-direction:column; gap:.8vw; }
+.topo h3{ font-size:1.45vw; }
+.topo p{ font-size:1.15vw; flex:1; }
+.topo-hl{ border-color:rgba(16,185,129,.45); background:linear-gradient(180deg,rgba(16,185,129,.1),var(--bg2)); }
+.topo-viz{ display:flex; align-items:center; gap:.8vw; height:4vw; }
+.tn{ width:2.6vw; height:2.6vw; flex:none; border-radius:8px; display:grid; place-items:center; font:800 1.2vw/1 var(--mono); background:var(--bg); border:1px solid var(--line); color:var(--ink-dim); }
+.tbar{ flex:1; position:relative; display:flex; flex-direction:column; gap:.35vw; }
+.tbar::before,.tbar::after{ content:""; height:.4vw; border-radius:999px; background:linear-gradient(90deg,var(--aw),var(--b)); }
+.tbar.one::after{ display:none; }
+.tbar.one::before{ height:.5vw; }
+.tbar.two::before{ background:var(--aw); }
+.tbar.two::after{ background:linear-gradient(90deg,var(--w),var(--b)); }
+.tbar.many{ gap:.3vw; }
+.tbar.many::before{ background:var(--aw); }
+.tbar.many::after{ background:var(--ar); }
+.tbar.many{ box-shadow:0 .9vw 0 -.55vw var(--w), 0 1.7vw 0 -.55vw var(--r); }
+.topo-meter{ height:.7vw; background:#0a1124; border-radius:999px; overflow:hidden; }
+.topo-meter i{ display:block; height:100%; background:linear-gradient(90deg,var(--brand),var(--brand-2)); border-radius:999px; }
+
+/* ---------- transfer vs transaction ---------- */
+.def-row{ display:flex; gap:1.6vw; margin-top:1.4vw; }
+.def{ flex:1; border-radius:14px; background:var(--bg2); border:1px solid var(--line); padding:1.4vw 1.6vw; }
+.def b{ font-size:1.6vw; color:var(--ink); display:block; margin-bottom:.4vw; }
+.def p{ font-size:1.3vw; }
+.count-box{ margin-top:1.6vw; border-radius:var(--radius); background:linear-gradient(180deg,rgba(54,197,240,.07),var(--bg2)); border:1px solid var(--line); padding:1.8vw 2vw; }
+.count-title{ font:700 1.5vw/1 var(--font); margin-bottom:1.1vw; }
+.count-row{ display:flex; align-items:center; gap:1vw; flex-wrap:wrap; }
+.cnt{ font:800 1.7vw/1 var(--mono); color:#06101f; background:var(--cc,var(--ink-dim)); padding:.5em .7em; border-radius:10px; display:flex; align-items:baseline; gap:.35em; }
+.cnt small{ font-size:.95vw; }
+.cnt-op,.cnt-eq{ font:700 1.7vw/1 var(--mono); color:var(--ink-faint); }
+.cnt.total{ background:transparent; color:var(--ink); border:2px solid var(--brand); }
+.cnt.one{ background:transparent; color:var(--brand); border:2px dashed var(--brand-2); }
+.count-note{ font-size:1.25vw; margin-top:1.2vw; }
+
+/* ---------- concept 1 : compare timelines ---------- */
+.compare{ display:flex; gap:1.6vw; margin-top:1.4vw; }
+.cmp-side{ flex:1; border-radius:var(--radius); background:var(--bg2); border:1px solid var(--line); padding:1.5vw 1.6vw; display:flex; flex-direction:column; gap:1vw; }
+.cmp-tag{ font:700 1.1vw/1 var(--mono); padding:.5em .9em; border-radius:8px; align-self:flex-start; }
+.cmp-tag.bad{ color:var(--bad); background:rgba(244,63,94,.12); }
+.cmp-tag.good{ color:var(--good); background:rgba(16,185,129,.12); }
+.timeline{ display:flex; flex-direction:column; gap:.6vw; }
+.tl-tx,.tl-lane{ display:flex; align-items:center; gap:.5vw; }
+.tl-lbl{ font:800 1vw/1 var(--mono); width:2.4vw; flex:none; }
+.tl-a,.tl-d,.tl-wait,.tl-gap{ font:700 1vw/1 var(--mono); padding:.65em .9em; border-radius:7px; }
+.tl-a{ background:var(--aw-soft); color:var(--aw-ink); border:1px solid var(--aw); }
+.tl-d{ background:var(--r-soft); color:var(--r-ink); border:1px solid var(--r); }
+.tl-wait{ background:transparent; color:var(--ink-faint); border:1px dashed var(--line); }
+.tl-gap{ visibility:hidden; }
+.cmp-side p{ font-size:1.2vw; margin-top:auto; }
+
+/* ---------- concept 2 : burst ---------- */
+.burst-wrap{ display:flex; gap:1.6vw; margin-top:1.2vw; flex:1; }
+.burst-fields{ width:38%; display:flex; flex-direction:column; gap:1.1vw; }
+.bf{ display:flex; flex-direction:column; gap:.5vw; background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:1vw 1.2vw; }
+.bf > span{ font:700 1.2vw/1 var(--font); color:var(--ink); display:flex; justify-content:space-between; align-items:baseline; }
+.bf small{ font:500 .9vw/1 var(--mono); color:var(--ink-faint); }
+.bf input[type=range]{ width:100%; accent-color:var(--brand); cursor:pointer; }
+.bf output{ font:700 1.15vw/1 var(--mono); color:var(--brand); }
+.burst-modes{ display:flex; gap:.5vw; }
+.bm{ flex:1; font:700 1vw/1 var(--mono); padding:.7em 0; border-radius:8px; cursor:pointer; background:var(--bg); border:1px solid var(--line); color:var(--ink-dim); transition:.2s; }
+.bm.on{ background:var(--brand); color:#06101f; border-color:var(--brand); }
+.burst-viz{ flex:1; border-radius:var(--radius); background:var(--bg2); border:1px solid var(--line); padding:1.5vw 1.6vw; display:flex; flex-direction:column; gap:1vw; }
+.burst-readout b{ font:800 1.6vw/1.2 var(--mono); color:var(--ink); display:block; }
+.burst-readout span{ font-size:1.15vw; color:var(--ink-dim); }
+.beats{ display:flex; flex-wrap:wrap; gap:.6vw; align-content:flex-start; flex:1; }
+.beat{ min-width:3.4vw; height:3.4vw; padding:0 .5vw; border-radius:9px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--w-soft); border:1px solid var(--w); color:var(--w-ink); font:700 .95vw/1.1 var(--mono); animation:rise .4s both; }
+.beat small{ font-size:.72vw; color:var(--ink-faint); margin-top:.2vw; }
+
+/* ---------- concept 3 : outstanding ---------- */
+.parcels{ display:flex; flex-wrap:wrap; gap:.7vw; margin:.4vw 0; }
+.parcel{ font:700 1.1vw/1 var(--mono); padding:.7em 1em; border-radius:9px; background:color-mix(in srgb,var(--pc) 14%,var(--bg)); border:1px solid var(--pc); color:var(--pc); }
+.parcel.back{ opacity:.8; border-style:dashed; }
+.rule-row{ display:flex; gap:1vw; align-items:flex-start; padding:1vw 1.2vw; border-radius:12px; margin-bottom:.8vw; }
+.rule-row.good{ background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.4); }
+.rule-row.bad2{ background:rgba(244,63,94,.08); border:1px solid rgba(244,63,94,.35); }
+.rule-ic{ width:2.2vw; height:2.2vw; flex:none; border-radius:7px; display:grid; place-items:center; font:800 1.2vw/1 var(--mono); }
+.rule-row.good .rule-ic{ background:var(--good); color:#06101f; }
+.rule-row.bad2 .rule-ic{ background:var(--bad); color:#06101f; }
+.rule-row b{ font-size:1.3vw; color:var(--ink); }
+.rule-row p{ font-size:1.1vw; }
+.quote.mini{ font-size:1.2vw; padding:1vw 1.3vw; margin-top:auto; max-width:100%; }
+
+/* ---------- quiz question slides ---------- */
+.q-head{ display:flex; align-items:center; gap:1vw; }
+.q-diff{ font:700 1vw/1 var(--mono); padding:.5em .9em; border-radius:999px; }
+.q-diff.easy{ color:var(--b); background:rgba(16,185,129,.12); }
+.q-diff.medium{ color:var(--brand); background:rgba(54,197,240,.12); }
+.q-diff.hard{ color:var(--r); background:rgba(192,132,252,.14); }
+.q-prog{ font:700 1.05vw/1 var(--mono); color:var(--ink-faint); }
+.q-text{ font-size:2.3vw; line-height:1.2; font-weight:800; letter-spacing:-.01em; margin:1vw 0 1.2vw; max-width:92%; }
+.q-text .mono{ color:var(--brand); }
+.options{ display:flex; flex-direction:column; gap:.7vw; flex:1; }
+.opt{
+  display:flex; align-items:center; gap:1.2vw;
+  padding:1.05vw 1.5vw; border-radius:14px; cursor:pointer;
+  background:var(--bg2); border:1.5px solid var(--line);
+  font-size:1.45vw; color:var(--ink-dim); text-align:left;
+  transition:transform .12s, border-color .2s, background .2s;
+}
+.opt:hover{ transform:translateX(6px); border-color:var(--ink-faint); color:var(--ink); }
+.opt-key{ width:2.6vw; height:2.6vw; flex:none; border-radius:8px; display:grid; place-items:center; font:800 1.3vw/1 var(--mono); background:var(--bg); border:1px solid var(--line); color:var(--ink-dim); }
+.opt-ic{ margin-left:auto; font-size:1.6vw; opacity:0; transition:opacity .2s; flex:none; }
+/* revealed states */
+.options.locked .opt{ cursor:default; }
+.options.locked .opt:not(.correct):not(.chosen){ opacity:.45; }
+.opt.correct{ border-color:var(--good); background:rgba(16,185,129,.12); color:var(--ink); }
+.opt.correct .opt-key{ background:var(--good); color:#06101f; border-color:var(--good); }
+.opt.correct .opt-ic.ok{ opacity:1; color:var(--good); }
+.opt.chosen.wrong{ border-color:var(--bad); background:rgba(244,63,94,.1); color:var(--ink); }
+.opt.chosen.wrong .opt-key{ background:var(--bad); color:#06101f; border-color:var(--bad); }
+.opt.chosen.wrong .opt-ic.no{ opacity:1; color:var(--bad); }
+.explain{
+  margin-top:1vw; border-radius:14px; padding:0 1.6vw;
+  background:linear-gradient(90deg,rgba(16,185,129,.1),var(--bg2));
+  border:1px solid rgba(16,185,129,.4); border-left:4px solid var(--good);
+  max-height:0; overflow:hidden; opacity:0;
+  transition:max-height .5s ease, opacity .4s ease, padding .4s ease;
+}
+.explain.show{ max-height:26vh; opacity:1; padding:1.2vw 1.6vw; }
+.explain b{ color:var(--good); font:700 1.05vw/1 var(--mono); display:block; margin-bottom:.5vw; letter-spacing:.05em; text-transform:uppercase; }
+.explain p{ font-size:1.25vw; color:var(--ink-dim); line-height:1.45; }
+
+/* ---------- closing recap ---------- */
+.recap{ display:flex; gap:1.2vw; margin:1vw 0; }
+.recap-item{ flex:1; border-radius:14px; background:var(--bg2); border:1px solid var(--line); border-top:3px solid var(--rc); padding:1.2vw 1.4vw; }
+.recap-item b{ font-size:1.6vw; color:var(--ink); display:block; }
+.recap-item span{ font:600 1.05vw/1 var(--mono); color:var(--ink-faint); }
+
+
+
+
+/* ============================================================
+   ANNOTATION LAYER  ·  Apple Pencil / iPad freehand drawing
+   ============================================================ */
+#annoCanvas{
+  position:absolute; inset:0; width:100%; height:100%;
+  z-index:35; pointer-events:none; touch-action:none;
+}
+body.draw-on #annoCanvas{ pointer-events:auto; cursor:crosshair; }
+/* while drawing, tap-to-navigate on the deck is suppressed in JS */
+
+/* floating tool dock — right edge, over the free camera/notes zone (not slide content) */
+#annoDock{
+  position:fixed; right:10px; top:50%; transform:translateY(-50%);
+  z-index:60; display:flex; flex-direction:column; gap:6px;
+  padding:8px; border-radius:16px;
+  background:rgba(12,18,38,.86); border:1px solid var(--line);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+  user-select:none; -webkit-user-select:none; touch-action:manipulation;
+}
+#annoDock.collapsed > *:not(.adk-master):not(.adk-grip){ display:none; }
+.adk{
+  width:44px; height:44px; flex:none; border-radius:11px;
+  display:grid; place-items:center; cursor:pointer;
+  background:var(--bg2); border:1px solid var(--line); color:var(--ink-dim);
+  font:700 16px/1 var(--font); transition:.15s;
+}
+.adk:hover{ color:var(--ink); border-color:var(--ink-faint); }
+.adk.on{ background:var(--brand); border-color:var(--brand); color:#06101f; }
+.adk-master.on{ background:var(--brand); border-color:var(--brand); color:#06101f; box-shadow:0 0 0 3px rgba(54,197,240,.25); }
+.adk-sep{ height:1px; background:var(--line); margin:2px 4px; }
+.adk-grip{ height:20px; display:grid; place-items:center; cursor:grab; color:var(--ink-faint); font:700 13px/1 var(--mono); letter-spacing:2px; touch-action:none; }
+.adk-grip:active{ cursor:grabbing; color:var(--ink-dim); }
+.adk-tools{ display:flex; flex-direction:column; gap:6px; }
+.adk-row{ display:flex; gap:6px; }
+.adk-row .adk{ width:34px; height:34px; border-radius:9px; }
+/* color swatches */
+.adk-sw{ width:34px; height:34px; border-radius:9px; cursor:pointer; border:2px solid transparent; box-shadow:inset 0 0 0 1px rgba(255,255,255,.15); transition:.15s; }
+.adk-sw.on{ border-color:#fff; transform:scale(1.06); }
+/* width dots */
+.adk-w{ width:34px; height:34px; border-radius:9px; display:grid; place-items:center; background:var(--bg2); border:1px solid var(--line); cursor:pointer; }
+.adk-w.on{ border-color:var(--brand); background:rgba(54,197,240,.12); }
+.adk-w i{ display:block; border-radius:50%; background:var(--ink-dim); }
+.adk-w.on i{ background:var(--brand); }
+.adk-lbl{ font:600 8.5px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); text-align:center; margin-top:-2px; }
+body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
+@media (max-width:820px){ .adk{ width:50px; height:50px; } .adk-sw,.adk-w,.adk-row .adk{ width:40px; height:40px; } }
+
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="stage">
+  <div id="deck">
+
+    <!-- ============ 1 · TITLE ============ -->
+    <section class="slide">
+      <template class="snote"><em>Hook: every chip in your phone, laptop, and car has a traffic problem.</em> Billions of transistors, dozens of engines — CPU, GPU, camera, memory — all screaming for the same data at the same time. <strong>AXI is the traffic system that keeps it from gridlocking.</strong> By the end of this module you'll read an AXI waveform the way you read a sentence.<span class="cue">Warm, slow open. Smile. Don't rush the title.</span></template>
+      <div class="title-wrap">
+        <div class="brandbar" data-anim style="--d:0">
+          <div class="logo">E</div>
+          <div class="brandname">ElectronicBit</div>
+        </div>
+        <div data-anim style="--d:1"><div class="kicker">AXI Protocol Course</div></div>
+        <h1 data-anim style="--d:2">Module 1<br><span class="accent">AXI Introduction</span></h1>
+        <p class="lead" data-anim style="--d:3">The high-performance on-chip bus that moves data inside every modern SoC — from first principles.</p>
+        <div class="title-meta" data-anim style="--d:4">
+          <span class="chip lvl">● Level 1 · Easy</span>
+          <span class="chip">Arm AMBA · AXI</span>
+          <span class="chip">Spec ref: IHI0022L · Chapter A1</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 2 · AGENDA ============ -->
+    <section class="slide">
+      <template class="snote">Here's the deal for the next few minutes. <strong>Three ideas</strong>, then you prove to yourself you got them. First — what AXI even is, and the one design choice that makes it fast. Second — the architecture: <strong>five channels</strong> that everything else is built on. Third — the key concepts that show up in every interview and every spec. <em>Then twelve questions, and I promise the hard ones are sneaky.</em><span class="cue">Count "one, two, three" on fingers. Tease the quiz.</span></template>
+      <div class="section-tag">Roadmap</div>
+      <div class="kicker" data-anim style="--d:0">What we'll cover</div>
+      <h2 data-anim style="--d:1" style="margin-top:1.2vw">Three ideas, then you test yourself</h2>
+      <div class="agenda">
+        <div class="agenda-row" data-anim style="--d:2;--accent-c:var(--aw)">
+          <div class="agenda-num">01</div>
+          <div class="agenda-txt">
+            <h3>What AXI is &amp; why it exists</h3>
+            <p>The bottleneck in old buses, and the one decision that fixed it.</p>
+          </div>
+        </div>
+        <div class="agenda-row" data-anim style="--d:3;--accent-c:var(--b)">
+          <div class="agenda-num">02</div>
+          <div class="agenda-txt">
+            <h3>The architecture — five channels</h3>
+            <p>Manager, Subordinate, interconnect, and how a transaction flows.</p>
+          </div>
+        </div>
+        <div class="agenda-row" data-anim style="--d:4;--accent-c:var(--ar)">
+          <div class="agenda-num">03</div>
+          <div class="agenda-txt">
+            <h3>Key concepts</h3>
+            <p>Address/data separation, bursts, and multiple outstanding transactions.</p>
+          </div>
+        </div>
+        <div class="agenda-row" data-anim style="--d:5;--accent-c:var(--brand-2)">
+          <div class="agenda-num">★</div>
+          <div class="agenda-txt">
+            <h3>Quiz — 12 questions</h3>
+            <p>Easy → Hard, with the reasoning behind every answer.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 3 · SECTION 1 DIVIDER ============ -->
+    <section class="slide divider" style="--sc:var(--aw)">
+      <template class="snote">Before we touch a single wire or signal name, I want you to understand <em>why AXI had to exist at all.</em> Because every feature we'll cover later is really just an answer to one painful problem engineers hit in the early 2000s. <strong>Get the problem, and the whole protocol stops feeling like trivia and starts feeling obvious.</strong><span class="cue">Pause on "why." Let it land.</span></template>
+      <div class="div-wrap">
+        <div class="div-num" data-anim style="--d:0">01</div>
+        <div>
+          <div class="kicker" data-anim style="--d:1">Article 1 of 3</div>
+          <h2 data-anim style="--d:2" class="div-title">What AXI is<br>&amp; why it exists</h2>
+          <p class="lead" data-anim style="--d:3">Before we touch a single signal, the problem AXI was built to solve.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 4 · WHAT IS AXI ============ -->
+    <section class="slide">
+      <template class="snote">AXI — <strong>Advanced eXtensible Interface.</strong> Say it once, then forget the long name. What matters: it's Arm's high-performance bus, part of the <strong>AMBA</strong> family, and it's the language blocks inside a chip use to talk. <em>Notice the spec's own words — "Manager" and "Subordinate," not "Master" and "Slave."</em> That's not just politics, it's a version tell. If someone says "Master," they're reading a spec from before 2021. We'll come back to that.<span class="cue">Read the quote in a slightly different voice — it's Arm talking.</span></template>
+      <div class="section-tag">01 · About AXI</div>
+      <div class="kicker" data-anim style="--d:0">The definition</div>
+      <h2 data-anim style="--d:1" style="margin-top:.8vw">AXI = <span class="accent">A</span>dvanced e<span class="accent">X</span>tensible <span class="accent">I</span>nterface</h2>
+      <p class="lead" data-anim style="--d:2" style="margin-top:1.4vw;max-width:64%">
+        Arm's high-performance on-chip bus protocol, part of the <strong>AMBA</strong> family.
+        Designed from the ground up for one goal: let fast, complex SoCs move data efficiently
+        without the bottlenecks of older buses like <strong>AHB</strong> or <strong>APB</strong>.
+      </p>
+      <div class="quote" data-anim style="--d:3">
+        <div class="quote-mark">“</div>
+        <div>
+          The AXI protocol supports high-performance, high-frequency system designs for
+          communication between <strong>Manager</strong> and <strong>Subordinate</strong> components.
+          <span class="quote-src">— IHI0022L §A1.1</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 5 · THE BOTTLENECK ============ -->
+    <section class="slide">
+      <template class="snote"><em>Here's the problem that started it all.</em> Old buses like AHB were <strong>address-phase locked</strong> — you send an address, then the whole bus just sits there frozen until the data comes back. At 100 megahertz with fast SRAM? Fine, nobody noticed. But crank to <strong>1 gigahertz</strong> against DRAM that takes a hundred cycles to answer, and your billion-dollar chip spends most of its life <em>waiting.</em> AXI's fix is almost embarrassingly simple: <strong>split address and data onto separate channels.</strong> Now you can fire the next address while you're still waiting on the last one's data. That one decision is the whole reason AXI exists.<span class="cue">Lean on "waiting." Point at the red bar.</span></template>
+      <div class="section-tag">01 · About AXI</div>
+      <div class="kicker" data-anim style="--d:0">Where AXI fits</div>
+      <h2 data-anim style="--d:1" style="margin-top:.6vw">The problem: <span style="color:var(--bad)">address-phase lock</span></h2>
+      <div class="split">
+        <div class="split-col" data-anim style="--d:2">
+          <div class="card card-bad">
+            <h3>Old buses — AHB / APB</h3>
+            <p>Every transfer <strong>ties up the bus</strong> until its data comes back. Address and data are locked together.</p>
+            <div class="latency-demo">
+              <div class="lat-row"><span class="lat-lbl">@100&nbsp;MHz, fast SRAM</span><div class="lat-track"><span class="lat-fill ok" style="width:30%"></span></div><span class="lat-tag ok">tolerable</span></div>
+              <div class="lat-row"><span class="lat-lbl">@1&nbsp;GHz, 100-cycle DRAM</span><div class="lat-track"><span class="lat-fill bad" style="width:100%"></span></div><span class="lat-tag bad">catastrophic</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="split-arrow" data-anim style="--d:3">→</div>
+        <div class="split-col" data-anim style="--d:4">
+          <div class="card card-good">
+            <h3>AXI's fix — <span class="accent">decouple</span></h3>
+            <p>Address and data travel on <strong>completely independent channels</strong>.</p>
+            <div class="decouple">
+              <div class="dc-lane"><span class="dc-tag" style="background:var(--aw-soft);color:var(--aw-ink);border-color:var(--aw)">ADDRESS</span><div class="dc-flow"><i></i><i></i><i></i></div></div>
+              <div class="dc-lane"><span class="dc-tag" style="background:var(--w-soft);color:var(--w-ink);border-color:var(--w)">DATA</span><div class="dc-flow slow"><i></i><i></i></div></div>
+            </div>
+            <p style="font-size:1.25vw">A Manager can issue a <strong>new address before the previous data returns</strong> — hiding latency behind useful work.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 6 · ROLES ============ -->
+    <section class="slide">
+      <template class="snote">Two roles, and only two. The <strong>Manager</strong> starts things — it asks for reads and writes. Think CPU, DMA engine, GPU. The <strong>Subordinate</strong> just answers — memory controllers, peripherals. <em>Simple rule of thumb: whoever speaks first is the Manager.</em> And here's that terminology point again — Master became Manager, Slave became Subordinate, back in 2021. Worth knowing because the old names are everywhere in legacy code and you'll need to translate on the fly.<span class="cue">Gesture left for Manager, right for Subordinate.</span></template>
+      <div class="section-tag">01 · About AXI</div>
+      <div class="kicker" data-anim style="--d:0">Two fundamental roles</div>
+      <h2 data-anim style="--d:1" style="margin-top:.6vw">Manager &amp; Subordinate</h2>
+      <p data-anim style="--d:2" style="margin-top:.6vw">AXI is an <strong>interface protocol</strong> — a contract between any two IP blocks about how they exchange address, data and control.</p>
+      <div class="roles">
+        <div class="role-card" data-anim style="--d:3;--rc:var(--aw)">
+          <div class="role-head"><span class="role-icon">▶</span><div><h3>Manager</h3><span class="role-old">was: “Master”</span></div></div>
+          <p>Any component that <strong>initiates</strong> transactions.</p>
+          <div class="role-ex">CPU core · DMA engine · GPU</div>
+        </div>
+        <div class="role-wire" data-anim style="--d:4">
+          <span>AW · W · B</span>
+          <div class="wire"></div>
+          <span>AR · R</span>
+        </div>
+        <div class="role-card" data-anim style="--d:5;--rc:var(--b)">
+          <div class="role-head"><span class="role-icon">■</span><div><h3>Subordinate</h3><span class="role-old">was: “Slave”</span></div></div>
+          <p>Any component that <strong>responds</strong> to transactions.</p>
+          <div class="role-ex">DRAM controller · MMIO peripheral</div>
+        </div>
+      </div>
+      <div class="note" data-anim style="--d:6">
+        <strong>Terminology:</strong> Arm replaced Master→Manager and Slave→Subordinate in <span class="mono">IHI0022J</span> (2021) for inclusivity. “Master” now signals an older spec version.
+      </div>
+    </section>
+
+    <!-- ============ 7 · KEY FEATURES ============ -->
+    <section class="slide">
+      <template class="snote">Don't try to memorize this list — that's the wrong instinct. <em>Every single feature here is just AXI solving a real headache someone actually had.</em> Separate phases? That's the latency fix we just saw. Byte strobes? So a compiler can write two bytes in the middle of a word without touching the rest. Bursts, multiple outstanding, out-of-order — all about keeping that data channel busy. <strong>The one I want you to remember is the last one: WSTRB, one bit per byte.</strong> A 64-bit bus has 8 strobe bits, and you can light up any combination. We'll see why that matters constantly.<span class="cue">Don't read all eight. Pick 2–3, point, move on.</span></template>
+      <div class="section-tag">01 · About AXI</div>
+      <div class="kicker" data-anim style="--d:0">IHI0022L §A1.1</div>
+      <h2 data-anim style="--d:1" style="margin-top:.4vw">Key features — each born of real need</h2>
+      <div class="feat-grid">
+        <div class="feat" data-anim style="--d:2"><span class="feat-i">⇄</span><div><b>Separate address / data phases</b><p>enables pipelining &amp; latency hiding</p></div></div>
+        <div class="feat" data-anim style="--d:2.6"><span class="feat-i">▦</span><div><b>Unaligned transfers via byte strobes</b><p>each byte enabled individually with WSTRB</p></div></div>
+        <div class="feat" data-anim style="--d:3.2"><span class="feat-i">⛓</span><div><b>Burst-based transactions</b><p>only the start address is sent</p></div></div>
+        <div class="feat" data-anim style="--d:3.8"><span class="feat-i">⇅</span><div><b>Separate read &amp; write data channels</b><p>low-cost DMA, no shared arbitration</p></div></div>
+        <div class="feat" data-anim style="--d:4.4"><span class="feat-i">≫</span><div><b>Multiple outstanding addresses</b><p>issue many requests before any response</p></div></div>
+        <div class="feat" data-anim style="--d:5"><span class="feat-i">⇋</span><div><b>Out-of-order completion</b><p>responses can return in any order</p></div></div>
+        <div class="feat" data-anim style="--d:5.6"><span class="feat-i">▮</span><div><b>Register-stage insertion</b><p>timing closure without protocol changes</p></div></div>
+        <div class="feat feat-hl" data-anim style="--d:6.2"><span class="feat-i">!</span><div><b>WSTRB has one bit per byte</b><p>a 64-bit bus → 8-bit strobe; write only bytes 2 &amp; 5? totally valid</p></div></div>
+      </div>
+    </section>
+
+    <!-- ============ 8 · SECTION 2 DIVIDER ============ -->
+    <section class="slide divider" style="--sc:var(--b)">
+      <template class="snote"><em>This is the section that makes everything else click.</em> If you only remember one slide from this whole module, make it the next one. <strong>Five channels.</strong> Handshaking, ordering, bursts, atomics, cache coherency — every advanced AXI topic you'll ever meet is just rules layered on top of these five. Master the channels and the rest is detail.<span class="cue">Build anticipation — "the one slide that matters."</span></template>
+      <div class="div-wrap">
+        <div class="div-num" data-anim style="--d:0">02</div>
+        <div>
+          <div class="kicker" data-anim style="--d:1">Article 2 of 3</div>
+          <h2 data-anim style="--d:2" class="div-title">The architecture<br>five channels</h2>
+          <p class="lead" data-anim style="--d:3">Handshaking, ordering, bursts, atomics, coherency — all built on this one structure.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 9 · THE FIVE CHANNELS (map) ============ -->
+    <section class="slide">
+      <template class="snote"><em>Here it is — the heart of AXI.</em> Five channels, each totally independent. Three for writing: <strong>AW</strong> carries the write address, <strong>W</strong> carries the write data, <strong>B</strong> brings back the response. Two for reading: <strong>AR</strong> sends the read address, <strong>R</strong> returns the data <em>and</em> its response together. Watch the arrows — write stuff flows Manager to Subordinate, responses flow back. <strong>Each channel runs on its own clock-by-clock handshake, with nobody waiting on anybody else.</strong> That independence is the superpower.<span class="cue">Trace each lane with your finger as you name it. Slow down here.</span></template>
+      <div class="section-tag">02 · Architecture</div>
+      <div class="kicker" data-anim style="--d:0">The foundation of everything</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Five independent channels</h2>
+      <div class="chmap">
+        <div class="chmap-node mgr" data-anim style="--d:2">
+          <span class="node-icon">▶</span>
+          <b>Manager</b>
+          <small>initiates</small>
+        </div>
+
+        <div class="chmap-lanes">
+          <div class="ch-lane" data-anim style="--d:3;--c:var(--aw)">
+            <span class="ch-badge">AW</span>
+            <div class="ch-line"><i></i></div>
+            <span class="ch-dir">write address ▸</span>
+            <span class="ch-desc">addr · burst params · protection</span>
+          </div>
+          <div class="ch-lane" data-anim style="--d:3.6;--c:var(--w)">
+            <span class="ch-badge">W</span>
+            <div class="ch-line"><i></i><i></i><i></i></div>
+            <span class="ch-dir">write data ▸</span>
+            <span class="ch-desc">data beats · WSTRB · WLAST</span>
+          </div>
+          <div class="ch-lane rev" data-anim style="--d:4.2;--c:var(--b)">
+            <span class="ch-badge">B</span>
+            <div class="ch-line"><i></i></div>
+            <span class="ch-dir">◂ write response</span>
+            <span class="ch-desc">completion status (BRESP)</span>
+          </div>
+          <div class="ch-lane" data-anim style="--d:4.8;--c:var(--ar)">
+            <span class="ch-badge">AR</span>
+            <div class="ch-line"><i></i></div>
+            <span class="ch-dir">read address ▸</span>
+            <span class="ch-desc">addr · burst params</span>
+          </div>
+          <div class="ch-lane rev" data-anim style="--d:5.4;--c:var(--r)">
+            <span class="ch-badge">R</span>
+            <div class="ch-line"><i></i><i></i><i></i></div>
+            <span class="ch-dir">◂ read data + response</span>
+            <span class="ch-desc">data beats · RRESP inline · RLAST</span>
+          </div>
+        </div>
+
+        <div class="chmap-node sub" data-anim style="--d:6">
+          <span class="node-icon">■</span>
+          <b>Subordinate</b>
+          <small>responds</small>
+        </div>
+      </div>
+      <div class="legend" data-anim style="--d:6.6">
+        <span><i style="background:var(--aw)"></i>write addr</span>
+        <span><i style="background:var(--w)"></i>write data</span>
+        <span><i style="background:var(--b)"></i>write resp</span>
+        <span><i style="background:var(--ar)"></i>read addr</span>
+        <span><i style="background:var(--r)"></i>read data</span>
+      </div>
+    </section>
+
+    <!-- ============ 10 · WRITES=3 READS=2 ============ -->
+    <section class="slide">
+      <template class="snote"><em>Quick puzzle — why do writes get three channels but reads only two?</em> Think about it for a second. The answer: on a read, the data is already coming back to you, so the Subordinate just <strong>staples the response onto each data beat</strong> — no separate channel needed. But on a write, your data flew off to the Subordinate; you have no idea if it landed safely. So you need a dedicated <strong>B channel</strong> to come back and say "got it." <em>And the killer detail: B fires once per transaction — not once per beat.</em> Sixteen beats of data, one single B response at the end. Mix that up and your protocol checker lights up red.<span class="cue">Ask the puzzle, pause 2 sec, then answer.</span></template>
+      <div class="section-tag">02 · Architecture</div>
+      <div class="kicker" data-anim style="--d:0">Notice the asymmetry</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Writes use <span style="color:var(--aw)">3</span> channels, reads use <span style="color:var(--r)">2</span></h2>
+      <div class="wr-split">
+        <div class="wr-card" data-anim style="--d:2;--wc:var(--aw)">
+          <h3>WRITE — three channels</h3>
+          <div class="wr-chans">
+            <span class="wr-chip" style="--cc:var(--aw)">AW</span>
+            <span class="wr-chip" style="--cc:var(--w)">W</span>
+            <span class="wr-chip" style="--cc:var(--b)">B</span>
+          </div>
+          <p>Address and data travel independently, so a <strong>dedicated B channel</strong> signals completion after all write data beats arrive.</p>
+        </div>
+        <div class="wr-card" data-anim style="--d:3;--wc:var(--r)">
+          <h3>READ — two channels</h3>
+          <div class="wr-chans">
+            <span class="wr-chip" style="--cc:var(--ar)">AR</span>
+            <span class="wr-chip" style="--cc:var(--r)">R</span>
+          </div>
+          <p>Data returns on R carrying its <strong>own response code inline</strong> — no separate response channel needed.</p>
+        </div>
+      </div>
+      <div class="note crit" data-anim style="--d:4">
+        <span class="crit-tag">⚠ Critical rule</span>
+        <strong>B fires once per transaction, not per beat.</strong> A 16-beat write transfers 16 W beats, but B fires exactly once — after the last beat. Fundamentally unlike AHB, where every transfer had its own response phase.
+      </div>
+    </section>
+
+    <!-- ============ 11 · WRITE FLOW ============ -->
+    <section class="slide">
+      <template class="snote">Let's walk one write all the way through. Step one — Manager puts the address on <strong>AW</strong>: "I want to write here." Step two — the data goes out on <strong>W</strong>, one or more beats. Step three — Subordinate comes back on <strong>B</strong>: "done, here's how it went." <em>But here's the twist that trips everyone up:</em> AW and W are independent, so the spec actually lets the <strong>data arrive before the address.</strong> The Subordinate just buffers it and waits to find out where it goes. Feels backwards, but that's the decoupling working exactly as designed.<span class="cue">Count the three steps. Land hard on "data before address."</span></template>
+      <div class="section-tag">02 · Architecture</div>
+      <div class="kicker" data-anim style="--d:0">How a write happens</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Write transaction flow</h2>
+      <div class="flow">
+        <div class="flow-step" data-anim style="--d:2;--fc:var(--aw)">
+          <div class="flow-n">1</div>
+          <span class="flow-badge">AW</span>
+          <p>Manager sends <strong>write address</strong> &amp; control</p>
+        </div>
+        <div class="flow-join" data-anim style="--d:2.5">＋</div>
+        <div class="flow-step" data-anim style="--d:3;--fc:var(--w)">
+          <div class="flow-n">2</div>
+          <span class="flow-badge">W</span>
+          <p>Manager sends one or more <strong>data beats</strong> — independently of AW</p>
+        </div>
+        <div class="flow-join" data-anim style="--d:3.5">➜</div>
+        <div class="flow-step" data-anim style="--d:4;--fc:var(--b)">
+          <div class="flow-n">3</div>
+          <span class="flow-badge">B</span>
+          <p>Subordinate signals <strong>completion</strong> — one BRESP for the whole transaction</p>
+        </div>
+      </div>
+      <div class="note" data-anim style="--d:5">
+        <strong>Key insight —</strong> AW and W are completely independent. The spec even allows <strong>write data to arrive before the address</strong>; the Subordinate buffers the data until it knows where to put it.
+      </div>
+    </section>
+
+    <!-- ============ 12 · READ FLOW + NAMING ============ -->
+    <section class="slide">
+      <template class="snote">Reads are the easy cousin — just two steps. Address out on <strong>AR</strong>, data back on <strong>R</strong>, with the response riding along on every beat. Done. <em>Now the part that'll save you hours of confusion:</em> AXI signal names are dead regular. Every AW-channel signal starts with "AW", every AR signal with "AR". And when the spec writes a lowercase <strong>x</strong> — like AxCACHE — it means "both of them at once," AWCACHE and ARCACHE. <em>So AxSIZE, AxBURST, AxPROT — that little x is shorthand, not a real signal.</em> Spot it once and the whole signal list stops looking scary.<span class="cue">Point at the AxCACHE = AWCACHE & ARCACHE line.</span></template>
+      <div class="section-tag">02 · Architecture</div>
+      <div class="kicker" data-anim style="--d:0">How a read happens · and how signals are named</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Read flow &amp; signal naming</h2>
+      <div class="two-up">
+        <div class="panel" data-anim style="--d:2">
+          <h3 style="color:var(--ar)">Read transaction flow</h3>
+          <div class="flow vert">
+            <div class="flow-step" style="--fc:var(--ar)"><div class="flow-n">1</div><span class="flow-badge">AR</span><p>Manager sends <strong>read address</strong> &amp; control</p></div>
+            <div class="flow-join">↓</div>
+            <div class="flow-step" style="--fc:var(--r)"><div class="flow-n">2</div><span class="flow-badge">R</span><p>Subordinate returns <strong>data beats</strong>, each carrying inline RRESP + RLAST on the last</p></div>
+          </div>
+        </div>
+        <div class="panel" data-anim style="--d:3">
+          <h3 style="color:var(--brand)">Naming is perfectly regular</h3>
+          <p style="margin:.6vw 0">Every signal on the AW channel starts with <span class="mono accent">AW</span>:</p>
+          <div class="sig-row"><span class="sig">AWADDR</span><span class="sig">AWLEN</span><span class="sig">AWVALID</span><span class="sig">AWREADY</span></div>
+          <p style="margin:1.1vw 0 .5vw">The lowercase <span class="mono accent">x</span> means “both read &amp; write”:</p>
+          <div class="ax-demo">
+            <span class="ax-pill">AxCACHE</span>
+            <span class="ax-eq">=</span>
+            <span class="sig" style="--sc:var(--aw)">AWCACHE</span>
+            <span class="ax-amp">&amp;</span>
+            <span class="sig" style="--sc:var(--ar)">ARCACHE</span>
+          </div>
+          <p style="font-size:1.1vw;margin-top:.8vw">Same for AxSIZE, AxPROT, AxBURST … you'll see this convention everywhere in the spec and in verification code.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 13 · INTERCONNECT ============ -->
+    <section class="slide">
+      <template class="snote">Real chips have lots of Managers and lots of Subordinates, and something has to sit in the middle routing traffic — that's the <strong>interconnect</strong>. The beautiful part: it uses the exact same AXI interface on both sides, so everything plugs together uniformly. You get three flavors. <strong>Shared</strong> everything — cheap, small, slow. <strong>Shared address but multiple data paths</strong> — the sweet spot, because address traffic is tiny compared to data. And <strong>multilayer</strong> — everything parallel, maximum throughput, what you'd find in a high-end SoC. <em>Watch the throughput bars climb as area and complexity climb too — there's always a trade.</em><span class="cue">Sweep across the three meters left to right.</span></template>
+      <div class="section-tag">02 · Architecture</div>
+      <div class="kicker" data-anim style="--d:0">IHI0022L §A1.2.1</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Interconnect topologies</h2>
+      <p data-anim style="--d:2" style="margin-top:.4vw">Many Managers + Subordinates connect through a fabric. The same AXI interface definition is reused uniformly — the interconnect just exposes a Subordinate face to each Manager and a Manager face to each Subordinate.</p>
+      <div class="topo-grid">
+        <div class="topo" data-anim style="--d:3">
+          <div class="topo-viz"><span class="tn">M</span><div class="tbar one"></div><span class="tn">S</span></div>
+          <h3>Shared request &amp; data</h3>
+          <p>Simplest · lowest area · lowest throughput</p>
+          <div class="topo-meter"><i style="width:30%"></i></div>
+        </div>
+        <div class="topo" data-anim style="--d:3.6">
+          <div class="topo-viz"><span class="tn">M</span><div class="tbar two"></div><span class="tn">S</span></div>
+          <h3>Shared request, multiple data</h3>
+          <p>Good balance — address bandwidth ≪ data bandwidth</p>
+          <div class="topo-meter"><i style="width:65%"></i></div>
+        </div>
+        <div class="topo topo-hl" data-anim style="--d:4.2">
+          <div class="topo-viz"><span class="tn">M</span><div class="tbar many"></div><span class="tn">S</span></div>
+          <h3>Multilayer</h3>
+          <p>Independent request + data channels · maximum throughput</p>
+          <div class="topo-meter"><i style="width:100%"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 14 · TRANSFER vs TRANSACTION ============ -->
+    <section class="slide">
+      <template class="snote"><em>These two words sound the same and mean totally different things — and interviewers love this one.</em> A <strong>transfer</strong> is tiny: one handshake, one channel, one clock cycle. A <strong>transaction</strong> is the whole job — all the transfers it takes to finish one read or one write. Look at the math: a 4-beat write is one AW, four W's, one B — that's <strong>six transfers, but only one transaction.</strong> Why care? Because a protocol checker hunts at the transfer level, while performance counters think in transactions. <em>Use the wrong word in a design review and people will notice.</em><span class="cue">Tap each number in the equation: 1 + 4 + 1 = 6.</span></template>
+      <div class="section-tag">02 · Architecture</div>
+      <div class="kicker" data-anim style="--d:0">Precise terminology — not interchangeable</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Transfer <span style="color:var(--ink-faint)">vs</span> Transaction</h2>
+      <div class="def-row">
+        <div class="def" data-anim style="--d:2"><b>Transfer</b><p>communication in <strong>one clock cycle on one channel</strong> (one VALID+READY handshake)</p></div>
+        <div class="def" data-anim style="--d:2.6"><b>Transaction</b><p>the <strong>complete set of transfers</strong> for one Manager↔Subordinate operation</p></div>
+      </div>
+      <div class="count-box" data-anim style="--d:3.4">
+        <div class="count-title">A 4-beat burst write =</div>
+        <div class="count-row">
+          <span class="cnt" style="--cc:var(--aw)">1 <small>AW</small></span><span class="cnt-op">+</span>
+          <span class="cnt" style="--cc:var(--w)">4 <small>W</small></span><span class="cnt-op">+</span>
+          <span class="cnt" style="--cc:var(--b)">1 <small>B</small></span><span class="cnt-op">=</span>
+          <span class="cnt total">6 transfers</span>
+          <span class="cnt-eq">·</span>
+          <span class="cnt one">1 transaction</span>
+        </div>
+        <p class="count-note">A protocol checker fires on <strong>transfer</strong>-level violations; performance analysis works at <strong>transaction</strong> granularity.</p>
+      </div>
+    </section>
+
+    <!-- ============ 15 · SECTION 3 DIVIDER ============ -->
+    <section class="slide divider" style="--sc:var(--ar)">
+      <template class="snote">You've got the channels. <em>Now let's see what they actually buy you.</em> Three concepts that turn five wires into raw speed — and these are exactly the ideas that separate someone who's heard of AXI from someone who really gets it. Separate phases, bursts, and outstanding transactions. <strong>This is the "why it's fast" section.</strong><span class="cue">Energy up — this is the payoff section.</span></template>
+      <div class="div-wrap">
+        <div class="div-num" data-anim style="--d:0">03</div>
+        <div>
+          <div class="kicker" data-anim style="--d:1">Article 3 of 3</div>
+          <h2 data-anim style="--d:2" class="div-title">Key concepts<br>that make it fast</h2>
+          <p class="lead" data-anim style="--d:3">Three ideas: separate phases, bursts, and outstanding transactions.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 16 · ADDRESS/DATA SEPARATION ============ -->
+    <section class="slide">
+      <template class="snote">Remember the bottleneck from earlier? Here it is, side by side. On the left, <strong>AHB</strong> — address, data, then everyone <em>waits</em> before the next one can even start. On the right, <strong>AXI</strong> — addresses a-1, a-2, a-3 fire off back to back while the data streams in behind them. <em>Put a number on it: a DRAM controller might take 80 cycles to answer.</em> In the old world, your whole chip freezes for all 80. In AXI, the Manager just keeps firing requests and fills that time with real work. <strong>That's not a small optimization — that's the difference between a chip that ships and one that doesn't.</strong><span class="cue">Left then right. Stress the "80 cycles."</span></template>
+      <div class="section-tag">03 · Key Concepts</div>
+      <div class="kicker" data-anim style="--d:0">Concept 1</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Separate address &amp; data phases</h2>
+      <div class="compare">
+        <div class="cmp-side" data-anim style="--d:2">
+          <div class="cmp-tag bad">AHB — coupled</div>
+          <div class="timeline">
+            <div class="tl-tx"><span class="tl-a">addr</span><span class="tl-d">data</span><span class="tl-wait">…wait…</span></div>
+            <div class="tl-tx"><span class="tl-a">addr</span><span class="tl-d">data</span></div>
+          </div>
+          <p>Bus occupied for the whole transaction. Next one can't start until this finishes.</p>
+        </div>
+        <div class="cmp-side" data-anim style="--d:3">
+          <div class="cmp-tag good">AXI — decoupled</div>
+          <div class="timeline">
+            <div class="tl-lane"><span class="tl-lbl" style="color:var(--aw)">AR</span><span class="tl-a">a1</span><span class="tl-a">a2</span><span class="tl-a">a3</span></div>
+            <div class="tl-lane"><span class="tl-lbl" style="color:var(--r)">R</span><span class="tl-gap"></span><span class="tl-d">d1</span><span class="tl-d">d2</span><span class="tl-d">d3</span></div>
+          </div>
+          <p>Issue a3 while d1 is still in flight. Independent flow control per channel.</p>
+        </div>
+      </div>
+      <div class="note" data-anim style="--d:4">
+        <strong>Why it matters —</strong> a DRAM controller may take <strong>80 cycles</strong> per request. Without separation, everything upstream stalls for all 80. With AXI, the Manager fires the next address immediately, hiding latency behind useful work.
+      </div>
+    </section>
+
+    <!-- ============ 17 · BURSTS (interactive) ============ -->
+    <section class="slide">
+      <template class="snote"><em>This is my favorite slide because you get to play with it.</em> A burst means: send <strong>one</strong> address, get <strong>many</strong> beats of data. The Subordinate figures out the rest of the addresses itself. Three knobs control it. <strong>AxLEN</strong> is the beat count — but it's beats <em>minus one</em>, so 7 means 8 beats. That off-by-one is a classic exam trap. <strong>AxSIZE</strong> is bytes per beat, as a power of two. And <strong>AxBURST</strong> is the pattern — FIXED stays put, INCR climbs, WRAP loops around. Watch the boxes redraw as I drag. <em>One address for sixteen beats — that's why the address channel barely needs any bandwidth.</em><span class="cue">Actually drag the sliders. Toggle INCR vs WRAP live.</span></template>
+      <div class="section-tag">03 · Key Concepts</div>
+      <div class="kicker" data-anim style="--d:0">Concept 2 · try the sliders</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Burst-based transfers</h2>
+      <p data-anim style="--d:2" style="margin-top:.3vw">Send <strong>one</strong> start address; the Subordinate computes the rest from three fields.</p>
+      <div class="burst-wrap">
+        <div class="burst-fields no-nav" data-anim style="--d:3">
+          <label class="bf">
+            <span>AxLEN <small>beats − 1</small></span>
+            <input type="range" id="axlen" min="0" max="15" value="7">
+            <output id="axlen-out">7 → 8 beats</output>
+          </label>
+          <label class="bf">
+            <span>AxSIZE <small>bytes/beat = 2ⁿ</small></span>
+            <input type="range" id="axsize" min="0" max="6" value="3">
+            <output id="axsize-out">3 → 8 bytes</output>
+          </label>
+          <div class="bf">
+            <span>AxBURST <small>address mode</small></span>
+            <div class="burst-modes">
+              <button class="bm on" data-mode="FIXED">FIXED</button>
+              <button class="bm" data-mode="INCR">INCR</button>
+              <button class="bm" data-mode="WRAP">WRAP</button>
+            </div>
+          </div>
+        </div>
+        <div class="burst-viz" data-anim style="--d:4">
+          <div class="burst-readout"><b id="burst-total">8 beats × 8 B = 64 bytes</b><span id="burst-mode-desc">FIXED — every beat hits the same address</span></div>
+          <div class="beats" id="beats"></div>
+        </div>
+      </div>
+      <div class="note" data-anim style="--d:5">
+        Instead of 16 addresses for a 16-beat burst, you send <strong>one</strong>. Address-channel bandwidth is a tiny fraction of data bandwidth — which is why interconnects optimize for data throughput.
+      </div>
+    </section>
+
+    <!-- ============ 18 · OUTSTANDING TRANSACTIONS ============ -->
+    <section class="slide">
+      <template class="snote"><em>Best way to get this? Think about shipping packages.</em> You don't stand at the post office waiting for one parcel to be delivered before mailing the next — you drop off five at once, each with its own <strong>tracking number</strong>, and they come back whenever they come back. That tracking number is the <strong>transaction ID</strong> — AWID and ARID going out, BID and RID coming home. <em>And here's the one rule that actually matters:</em> different IDs can finish in any order — that's the hardware free to be fast. But <strong>same ID must stay in order.</strong> That's your control knob: same ID when order matters, different IDs when you want raw speed.<span class="cue">Use the parcel analogy with your hands. Stress the ordering rule.</span></template>
+      <div class="section-tag">03 · Key Concepts</div>
+      <div class="kicker" data-anim style="--d:0">Concept 3</div>
+      <h2 data-anim style="--d:1" style="margin-top:.3vw">Multiple outstanding transactions</h2>
+      <div class="two-up">
+        <div class="panel" data-anim style="--d:2">
+          <h3 style="color:var(--brand-2)">📦 The postal model</h3>
+          <p style="margin:.5vw 0 1vw">Drop off 5 packages at once. Each gets a <strong>tracking number</strong> (transaction ID). Deliveries come back in whatever order the routes allow — you match tracking numbers to know which arrived.</p>
+          <div class="parcels">
+            <div class="parcel" style="--pc:var(--ar)">ID 1 ↗</div>
+            <div class="parcel" style="--pc:var(--r)">ID 2 ↗</div>
+            <div class="parcel" style="--pc:var(--aw)">ID 3 ↗</div>
+            <div class="parcel back" style="--pc:var(--r)">↘ ID 2</div>
+            <div class="parcel back" style="--pc:var(--ar)">↘ ID 1</div>
+          </div>
+          <p style="font-size:1.1vw;margin-top:.6vw">IDs: AWID/ARID on the way out, BID/RID on the way back.</p>
+        </div>
+        <div class="panel" data-anim style="--d:3">
+          <h3 style="color:var(--brand)">The ordering rule</h3>
+          <div class="rule-row good"><span class="rule-ic">✓</span><div><b>Different IDs</b><p>may complete out of order — hardware exploits parallelism</p></div></div>
+          <div class="rule-row bad2"><span class="rule-ic">=</span><div><b>Same ID</b><p>must complete in issue order — software enforces ordering</p></div></div>
+          <div class="quote mini">
+            “The AXI protocol supports multiple outstanding transactions and out-of-order completion.”
+            <span class="quote-src">— IHI0022L §A1.2</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 19 · QUIZ DIVIDER ============ -->
+    <section class="slide divider" style="--sc:var(--brand-2)">
+      <div class="div-wrap">
+        <div class="div-num" data-anim style="--d:0">★</div>
+        <div>
+          <div class="kicker" data-anim style="--d:1">MCQ Bank</div>
+          <h2 data-anim style="--d:2" class="div-title">Test yourself<br>12 questions</h2>
+          <p class="lead" data-anim style="--d:3">Easy → Medium → Hard. Click an answer to reveal the reasoning.</p>
+          <div class="title-meta" data-anim style="--d:4">
+            <span class="chip" style="color:var(--b);border-color:var(--b)">6 Easy</span>
+            <span class="chip" style="color:var(--brand);border-color:var(--brand)">4 Medium</span>
+            <span class="chip" style="color:var(--r);border-color:var(--r)">2 Hard</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUIZ-SLOT : question slides injected here by script -->
+
+    <!-- ============ CLOSING ============ -->
+    <section class="slide" id="closing">
+      <template class="snote"><em>That's Module 1 — take a breath, you earned it.</em> Zoom out and it's just four ideas: address and data are <strong>decoupled</strong>, there are <strong>five channels</strong>, data moves in <strong>bursts</strong>, and you can have many transactions <strong>outstanding</strong> at once. Everything fancy in AXI is built on those. <em>Next module we go one level deeper — the VALID/READY handshake, the little two-signal dance that every single channel runs on.</em> If you found this useful, like and subscribe so the next one finds you. See you there.<span class="cue">Warm close. Direct call-to-action. Hold a beat before cutting.</span></template>
+      <div class="title-wrap">
+        <div class="brandbar" data-anim style="--d:0"><div class="logo">E</div><div class="brandname">ElectronicBit</div></div>
+        <div class="kicker" data-anim style="--d:1">Module 1 complete</div>
+        <h1 data-anim style="--d:2" style="font-size:4.4vw">You now understand<br>the <span class="accent">shape</span> of AXI.</h1>
+        <div class="recap" data-anim style="--d:3">
+          <div class="recap-item" style="--rc:var(--aw)"><b>Decoupled</b><span>address ≠ data</span></div>
+          <div class="recap-item" style="--rc:var(--b)"><b>5 channels</b><span>AW·W·B·AR·R</span></div>
+          <div class="recap-item" style="--rc:var(--ar)"><b>Bursts</b><span>one address, many beats</span></div>
+          <div class="recap-item" style="--rc:var(--brand-2)"><b>Outstanding</b><span>IDs + out-of-order</span></div>
+        </div>
+        <p class="lead" data-anim style="--d:4">Next module: the <strong>VALID / READY handshake</strong> — the heartbeat of every channel.</p>
+      </div>
+    </section>
+
+    <!-- SLIDES-END -->
+  </div>
+</div>
+
+<!-- chrome -->
+<div id="dots"></div>
+<div id="counter"><b id="cur">1</b> / <span id="tot">1</span></div>
+<div id="hint"><span><kbd>→</kbd> next</span><span><kbd>←</kbd> back</span><span><kbd>F</kbd> fullscreen</span><span><kbd>C</kbd> camera guide</span><span><kbd>D</kbd> draw</span></div>
+
+<!-- annotation tool dock (built/wired in script) -->
+<div id="annoDock"></div>
+
+<script>
+/* ---------------- slide engine ---------------- */
+const deck   = document.getElementById('deck');
+
+/* ---------------- build quiz slides BEFORE engine reads the slide list ---------------- */
+(function buildQuiz(){
+  const QUIZ=[
+    {d:'Easy',q:'Which AXI channel carries the <span class="mono">write address</span>?',
+     o:['W — write data channel','AW — write request channel','B — write response channel','AR — read request channel'],c:1,
+     e:'The write address travels on the <b>AW</b> (write request) channel — the key signal is AWADDR. W carries write data, B carries the response, AR carries the read address.'},
+    {d:'Easy',q:'True or False: AXI requires the write address and write data to be sent in the <span class="mono">same clock cycle</span>.',
+     o:['True — address and data are always paired','False — they travel on independent channels with independent flow control'],c:1,
+     e:'False. AW and W have completely independent VALID/READY handshakes. AXI explicitly permits the address ahead of the data, and write data is always treated as buffered — so the Subordinate can even accept data before the address arrives.'},
+    {d:'Easy',q:'What is the correct term for the component that <span class="mono">initiates</span> AXI transactions?',
+     o:['Master','Initiator','Manager','Controller'],c:2,
+     e:'Since IHI0022J (2021), Arm replaced “Master” with <b>Manager</b> and “Slave” with “Subordinate”. Using “Master” now refers to older spec versions (AXI4 and earlier).'},
+    {d:'Easy',q:'How many channels does a complete AXI <span class="mono">write</span> transaction use?',
+     o:['1 — a single bidirectional channel','2 — AW and W','3 — AW, W and B','5 — all AXI channels'],c:2,
+     e:'A write uses <b>AW</b> (address), <b>W</b> (data) and <b>B</b> (response). AR and R are read-only. Write data is treated as buffered — the Manager may send it before receiving B.'},
+    {d:'Easy',q:'On the read data (R) channel, where does the <span class="mono">response status</span> travel?',
+     o:['On a separate response channel, like writes','Inline on each R-channel beat, alongside the data','Only on the final beat identified by RLAST','On the AR channel as a return attribute'],c:1,
+     e:'The R channel carries data <b>and</b> the response (RRESP) inline on every beat. That’s why reads need only two channels (AR + R) while writes need three — the read response is embedded in the data channel.'},
+    {d:'Easy',q:'Which signal marks the <span class="mono">final data beat</span> of a burst?',
+     o:['WLAST on the W channel and RLAST on the R channel','WEND and REND signals','Asserting BVALID before the last beat','A zero value on WSTRB'],c:0,
+     e:'<b>WLAST</b> marks the final write beat; <b>RLAST</b> the final read beat. The Subordinate must wait for WLAST before asserting BVALID; the Manager uses RLAST to know a read burst is complete.'},
+    {d:'Medium',q:'Three reads issue with ARID 0x1, 0x2, 0x3. The response for <span class="mono">0x2 arrives before 0x1</span>. Protocol violation?',
+     o:['Yes — AXI requires responses in issue order','No — different IDs allow out-of-order completion','Yes — responses must be ordered by address','No — but only if out-of-order mode was enabled'],c:1,
+     e:'Completely legal. AXI permits out-of-order completion across <b>different</b> IDs; the Manager matches responses by RID. It would only be a violation if both shared the same ARID.'},
+    {d:'Medium',q:'<span class="mono">AxLEN = 0b00000111</span> on an INCR burst. How many data beats transfer?',
+     o:['7 beats','8 beats','16 beats','256 beats'],c:1,
+     e:'AxLEN encodes (beats − 1). 0b00000111 = 7, so 7 + 1 = <b>8 beats</b>. Values 0–255 map to 1–256 beats. Always add 1.'},
+    {d:'Medium',q:'What collective prefix refers to both <span class="mono">AWCACHE and ARCACHE</span>?',
+     o:['xCACHE','AxCACHE','RWxCACHE','CtrlCACHE'],c:1,
+     e:'The lowercase <b>x</b> denotes “both read and write”, so <b>AxCACHE</b> = AWCACHE + ARCACHE. Same for AxSIZE, AxPROT, AxBURST — the convention runs through the whole spec.'},
+    {d:'Medium',q:'A 16-beat burst write completes. How many times does the <span class="mono">B channel</span> fire?',
+     o:['16 — once per data beat','2 — midpoint and end','1 — once for the entire transaction','0 — write response is optional'],c:2,
+     e:'B fires exactly <b>once per transaction</b>, never per beat. The Subordinate waits for the last write beat (WLAST) before asserting BVALID.'},
+    {d:'Hard',q:'An interconnect merges a 4-bit ARID from Manager A and a 4-bit ARID from Manager B into a <span class="mono">6-bit ARID</span> toward the Subordinate. Why widen the ID?',
+     o:['To support longer burst lengths','To let the Subordinate route responses back to the correct Manager','To enable out-of-order completion within one Manager','Because Subordinate interfaces always use more bits'],c:1,
+     e:'The interconnect <b>prepends bits</b> to namespace each Manager’s IDs, so responses route back to the right source. Two 4-bit IDs need ≥1 extra bit (5-bit min, 6-bit with margin).'},
+    {d:'Hard',q:'Which best describes the difference between a <span class="mono">transfer</span> and a <span class="mono">transaction</span>?',
+     o:['Transfer is a full read/write; transaction is one beat','Transfer = one cycle on one channel; transaction = the complete set of transfers','The terms are interchangeable','A transfer is a burst; a transaction is a single beat'],c:1,
+     e:'A <b>transfer</b> is one VALID+READY handshake on one channel in one cycle. A <b>transaction</b> is the whole operation: e.g. a 4-beat write = 1 AW + 4 W + 1 B = 6 transfers, 1 transaction.'}
+  ];
+  const QNOTES=[
+    `<em>Easy starter.</em> Which channel carries the write <strong>address</strong>? Read the names out loud — A-W is address-write. <em>The trap is picking W, but W only carries the data.</em><span class="cue">Read options aloud, pause, reveal.</span>`,
+    `True or false — must address and data ride the <em>same clock cycle</em>? <strong>False.</strong> Independent channels, remember? The data can even show up before the address does.<span class="cue">Let them guess before you click.</span>`,
+    `What do we call the component that <em>starts</em> a transaction? <strong>Manager.</strong> Not "Master" — that's the old word. Initiator and Controller are just there to tempt you.<span class="cue">Quick callback to the roles slide.</span>`,
+    `How many channels does a write need? <strong>Three — AW, W, and B.</strong> If you said two, you forgot the response coming back home.<span class="cue">Hold up three fingers.</span>`,
+    `On a read, where does the response live? <strong>Inline, on every R beat.</strong> That's the whole reason reads only need two channels and writes need three.<span class="cue">Tie it back to the asymmetry slide.</span>`,
+    `What signal flags the <em>final</em> beat? <strong>WLAST for writes, RLAST for reads.</strong> The word "LAST" is sitting right there in the name.<span class="cue">Easy points — keep the pace up.</span>`,
+    `<em>Read this one slowly.</em> ID 2 comes back before ID 1 — is that illegal? <strong>Nope, perfectly legal.</strong> Different IDs can finish in any order. It would only break if they shared an ID.<span class="cue">This is where Medium starts to bite.</span>`,
+    `<em>The off-by-one classic.</em> AxLEN of 7 means how many beats? <strong>Eight — always add one.</strong> Picking 7 is the single most common mistake on this whole topic.<span class="cue">Pause and let them fall for it first.</span>`,
+    `What prefix means both AWCACHE and ARCACHE? <strong>AxCACHE</strong> — lowercase x is "both." <em>If you were awake for the naming slide, this is a free point.</em><span class="cue">Wink at the callback.</span>`,
+    `Sixteen beats of write data — how many B responses fire? <strong>Exactly one.</strong> Once per transaction, never per beat. The big one to burn in.<span class="cue">Emphasize "once."</span>`,
+    `<em>Now it gets real.</em> Why does the interconnect widen the ID? <strong>To remember which Manager sent it</strong>, so the response routes back to the right place. It's tagging the source.<span class="cue">Slow down — this one's Hard.</span>`,
+    `<em>Last one — and it's our transfer-versus-transaction friend.</em> Transfer is one cycle on one channel; transaction is the whole job. <strong>Answer B.</strong> Nail this and you've genuinely got Module 1.<span class="cue">Big finish. Congratulate them.</span>`
+  ];
+  const KEYS=['A','B','C','D'];
+  const closing=document.getElementById('closing');
+  QUIZ.forEach((item,idx)=>{
+    const s=document.createElement('section');
+    s.className='slide';
+    const opts=item.o.map((txt,k)=>
+      `<button class="opt" data-correct="${k===item.c?1:0}">
+         <span class="opt-key">${KEYS[k]}</span>
+         <span class="opt-txt">${txt}</span>
+         <span class="opt-ic ok">✓</span><span class="opt-ic no">✗</span>
+       </button>`).join('');
+    s.innerHTML=`
+      <template class="snote">${QNOTES[idx]||''}</template>
+      <div class="section-tag">MCQ · ${idx+1} of ${QUIZ.length}</div>
+      <div class="q-head" data-anim style="--d:0">
+        <span class="q-diff ${item.d.toLowerCase()}">${item.d}</span>
+        <span class="q-prog">Question ${idx+1}</span>
+      </div>
+      <div class="q-text" data-anim style="--d:1">${item.q}</div>
+      <div class="options no-nav" data-anim style="--d:2">${opts}</div>
+      <div class="explain"><b>Explanation</b><p>${item.e}</p></div>`;
+    deck.insertBefore(s,closing);
+  });
+})();
+
+const slides = [...deck.querySelectorAll('.slide')];
+
+/* ---------------- camera layout: shrink content into left, free the right third ---------------- */
+(function applyCameraLayout(){
+  slides.forEach(slide=>{
+    const wrap=document.createElement('div');
+    wrap.className='cam-wrap';
+    /* move every child of the slide into the scalable wrapper, keep .section-tag pinned to the slide */
+    [...slide.childNodes].forEach(node=>{
+      if(node.nodeType===1 && node.classList.contains('section-tag')) return;
+      wrap.appendChild(node);
+    });
+    slide.appendChild(wrap);
+  });
+  /* camera-zone guide overlay */
+  const guide=document.createElement('div');
+  guide.className='cam-guide';
+  document.body.appendChild(guide);
+})();
+
+/* ---------------- speaker-notes teleprompter ---------------- */
+const snotePanel=document.createElement('div');
+snotePanel.className='snote-panel';
+snotePanel.innerHTML='<div class="snote-tag">Speaker notes</div><div class="snote-body"></div>';
+document.body.appendChild(snotePanel);
+const snoteBody=snotePanel.querySelector('.snote-body');
+function renderNote(){
+  const tpl=slides[i].querySelector('template.snote');
+  snoteBody.innerHTML = tpl ? tpl.innerHTML : '<em>—</em>';
+  snoteBody.scrollTop=0;
+}
+const dotsEl = document.getElementById('dots');
+const bar    = document.getElementById('progress');
+const curEl  = document.getElementById('cur');
+const totEl  = document.getElementById('tot');
+let i = 0;
+
+totEl.textContent = slides.length;
+slides.forEach((_,k)=>{
+  const d=document.createElement('div');
+  d.className='dot'; d.onclick=()=>go(k);
+  dotsEl.appendChild(d);
+});
+const dots=[...dotsEl.children];
+
+function go(n){
+  i = Math.max(0, Math.min(slides.length-1, n));
+  slides.forEach((s,k)=>s.classList.toggle('active', k===i));
+  dots.forEach((d,k)=>d.classList.toggle('on', k===i));
+  bar.style.width = ((i)/(slides.length-1)*100||0)+'%';
+  curEl.textContent = i+1;
+  renderNote();
+  if(window._annoRedraw) window._annoRedraw();
+}
+function next(){ go(i+1); }
+function prev(){ go(i-1); }
+
+document.addEventListener('keydown',e=>{
+  if(['ArrowRight',' ','PageDown'].includes(e.key)){ e.preventDefault(); next(); }
+  else if(['ArrowLeft','PageUp'].includes(e.key)){ e.preventDefault(); prev(); }
+  else if(e.key==='Home'){ go(0); }
+  else if(e.key==='End'){ go(slides.length-1); }
+  else if(e.key==='f'||e.key==='F'){ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen(); }
+  else if(e.key==='c'||e.key==='C'){ document.body.classList.toggle('cam-off'); }
+  else if(e.key==='n'||e.key==='N'){ document.body.classList.toggle('notes-off'); }
+  else if(e.key==='d'||e.key==='D'){ window.annoToggle && window.annoToggle(); }
+  else if(e.key==='z'||e.key==='Z'){ if(document.body.classList.contains('draw-on')){ e.preventDefault(); window.annoUndo && window.annoUndo(); } }
+});
+
+/* click right/left half to navigate (handy when recording) */
+deck.addEventListener('click',e=>{
+  if(document.body.classList.contains('draw-on')) return;  /* drawing mode: never navigate */
+  if(e.target.closest('.no-nav')) return;          /* interactive widgets opt out */
+  (e.clientX > window.innerWidth/2) ? next() : prev();
+});
+
+/* ---------------- interactive: quiz reveal ---------------- */
+document.querySelectorAll('.options').forEach(group=>{
+  const explain = group.parentElement.querySelector('.explain');
+  group.querySelectorAll('.opt').forEach(opt=>{
+    opt.addEventListener('click',()=>{
+      if(group.classList.contains('locked')) return;     /* answer once */
+      group.classList.add('locked');
+      const correct = opt.dataset.correct==='1';
+      opt.classList.add('chosen', correct?'correct':'wrong');
+      /* always reveal the right answer */
+      group.querySelectorAll('.opt').forEach(o=>{
+        if(o.dataset.correct==='1') o.classList.add('correct');
+      });
+      if(explain) explain.classList.add('show');
+    });
+  });
+});
+
+/* ---------------- interactive: burst calculator ---------------- */
+(function(){
+  const len  = document.getElementById('axlen');
+  const size = document.getElementById('axsize');
+  if(!len||!size) return;
+  const lenOut  = document.getElementById('axlen-out');
+  const sizeOut = document.getElementById('axsize-out');
+  const total   = document.getElementById('burst-total');
+  const modeDesc= document.getElementById('burst-mode-desc');
+  const beatsEl = document.getElementById('beats');
+  const modeBtns= [...document.querySelectorAll('.bm')];
+  let mode='FIXED';
+
+  const MODE_TXT={
+    FIXED:'FIXED — every beat hits the same address',
+    INCR :'INCR — address increments by the transfer size each beat',
+    WRAP :'WRAP — increments, then wraps at a power-of-2 boundary'
+  };
+
+  function render(){
+    const beats = (+len.value)+1;
+    const bytes = 1<<(+size.value);
+    lenOut.textContent  = `${len.value} → ${beats} beats`;
+    sizeOut.textContent = `${size.value} → ${bytes} byte${bytes>1?'s':''}`;
+    total.textContent   = `${beats} beats × ${bytes} B = ${beats*bytes} bytes`;
+    modeDesc.textContent= MODE_TXT[mode];
+
+    const base=0x40;
+    beatsEl.innerHTML='';
+    const show=Math.min(beats,16);
+    for(let k=0;k<show;k++){
+      let addr;
+      if(mode==='FIXED') addr=base;
+      else if(mode==='INCR') addr=base+k*bytes;
+      else { const wrapLen=beats*bytes; addr=base+((k*bytes)%wrapLen); }
+      const b=document.createElement('div');
+      b.className='beat';
+      b.style.animationDelay=(k*35)+'ms';
+      b.innerHTML=`#${k}<small>0x${addr.toString(16).toUpperCase()}</small>`;
+      beatsEl.appendChild(b);
+    }
+    if(beats>16){
+      const more=document.createElement('div');
+      more.className='beat'; more.style.opacity=.5;
+      more.innerHTML=`+${beats-16}<small>more</small>`;
+      beatsEl.appendChild(more);
+    }
+  }
+  len.addEventListener('input',render);
+  size.addEventListener('input',render);
+  modeBtns.forEach(btn=>btn.addEventListener('click',()=>{
+    modeBtns.forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on'); mode=btn.dataset.mode; render();
+  }));
+  render();
+})();
+
+/* ---------------- annotation layer (Apple Pencil / iPad) ---------------- */
+(function(){
+  /* canvas overlays the deck and scales with it */
+  const canvas=document.createElement('canvas');
+  canvas.id='annoCanvas';
+  deck.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+
+  const PALETTE=['#ffffff','#36c5f0','#ffd54a','#f43f5e','#10b981','#a78bfa'];
+  const WIDTHS=[2.2,4,7];                 /* logical px at deck base width */
+  const STORE_KEY='axi_m1_annotations_v1';
+
+  /* per-slide strokes; coords normalized 0..1 against deck box */
+  let store={};
+  try{ store=JSON.parse(localStorage.getItem(STORE_KEY))||{}; }catch(e){ store={}; }
+  function strokes(){ return (store[i] ||= []); }
+  function persist(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }catch(e){} }
+
+  let tool='pen', color=PALETTE[0], width=WIDTHS[1];
+  let drawing=false, cur=null;
+
+  /* ---- sizing: backing store at device pixels for crisp lines ---- */
+  function resize(){
+    const r=deck.getBoundingClientRect();
+    const dpr=Math.min(window.devicePixelRatio||1, 2.5);
+    canvas.width =Math.round(r.width *dpr);
+    canvas.height=Math.round(r.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    redraw();
+  }
+
+  function drawStroke(s){
+    const r=deck.getBoundingClientRect();
+    const W=r.width, H=r.height, base=s.width*(W/1280);
+    const pts=s.points;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    if(pts.length===1){
+      ctx.fillStyle=s.color;
+      ctx.globalAlpha = s.tool==='hi'?0.30:1;
+      ctx.globalCompositeOperation = s.tool==='hi'?'lighter':'source-over';
+      ctx.beginPath();
+      ctx.arc(pts[0].x*W, pts[0].y*H, base*(s.tool==='hi'?2.4:0.6), 0, 7); ctx.fill();
+      ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+      return;
+    }
+    if(s.tool==='hi'){ ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.30; }
+    else { ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; }
+    ctx.strokeStyle=s.color;
+    for(let k=1;k<pts.length;k++){
+      const a=pts[k-1], b=pts[k];
+      const pr = s.tool==='pen' ? (0.55+(b.p||0.5)) : (s.tool==='hi'?3.4:1);
+      ctx.lineWidth=base*pr;
+      ctx.beginPath(); ctx.moveTo(a.x*W,a.y*H); ctx.lineTo(b.x*W,b.y*H); ctx.stroke();
+    }
+    ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  }
+  function redraw(){ ctx.clearRect(0,0,canvas.width,canvas.height); strokes().forEach(drawStroke); }
+  window._annoRedraw=redraw;
+
+  /* ---- laser pointer: transient glow + fading trail, never persisted ---- */
+  let laserPts=[], laserRAF=0;
+  const LASER_LIFE=520;
+  function laserTick(){
+    const now=performance.now();
+    laserPts=laserPts.filter(p=> now-p.born < LASER_LIFE);
+    redraw();                                   /* persistent strokes underneath */
+    if(laserPts.length){
+      const r=deck.getBoundingClientRect(), W=r.width, H=r.height;
+      const base=width*(W/1280);
+      ctx.globalCompositeOperation='source-over'; ctx.lineCap='round';
+      for(let k=1;k<laserPts.length;k++){
+        const q=laserPts[k-1], p=laserPts[k];
+        const a=Math.max(0,1-(now-p.born)/LASER_LIFE);
+        ctx.globalAlpha=a*0.5; ctx.strokeStyle='#ff3b30';
+        ctx.lineWidth=Math.max(2,base*1.6)*a;
+        ctx.beginPath(); ctx.moveTo(q.x*W,q.y*H); ctx.lineTo(p.x*W,p.y*H); ctx.stroke();
+      }
+      const head=laserPts[laserPts.length-1], hr=Math.max(7,base*2.4);
+      ctx.globalAlpha=1; ctx.shadowColor='#ff3b30'; ctx.shadowBlur=hr*2.2;
+      const g=ctx.createRadialGradient(head.x*W,head.y*H,0,head.x*W,head.y*H,hr);
+      g.addColorStop(0,'#fff'); g.addColorStop(.35,'#ff5b52'); g.addColorStop(1,'rgba(255,59,48,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(head.x*W,head.y*H,hr,0,7); ctx.fill();
+      ctx.shadowBlur=0; ctx.globalAlpha=1;
+      laserRAF=requestAnimationFrame(laserTick);
+    } else { laserRAF=0; redraw(); }
+  }
+  function laserPush(pt){ laserPts.push({x:pt.x,y:pt.y,born:performance.now()}); if(!laserRAF) laserRAF=requestAnimationFrame(laserTick); }
+
+  /* ---- input ---- */
+  function pos(e){
+    const r=canvas.getBoundingClientRect();
+    return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height, p:e.pressure||0.5 };
+  }
+  function eraseAt(pt){
+    const r=deck.getBoundingClientRect();
+    const hitR=(width*2.4)/r.width;     /* eraser radius in normalized units */
+    const arr=strokes(); let removed=false;
+    for(let s=arr.length-1;s>=0;s--){
+      for(const q of arr[s].points){
+        if(Math.hypot(q.x-pt.x, q.y-pt.y) < hitR){ arr.splice(s,1); removed=true; break; }
+      }
+    }
+    if(removed){ redraw(); persist(); }
+  }
+
+  canvas.addEventListener('pointerdown',e=>{
+    if(!document.body.classList.contains('draw-on')) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    drawing=true;
+    if(tool==='laser'){ laserPush(pos(e)); return; }
+    if(tool==='eraser'){ eraseAt(pos(e)); return; }
+    cur={tool, color, width, points:[pos(e)]};
+    strokes().push(cur);
+    redraw();
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!drawing) return;
+    e.preventDefault();
+    const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];   /* smoother Pencil lines */
+    if(tool==='laser'){ evs.forEach(ev=>laserPush(pos(ev))); return; }
+    if(tool==='eraser'){ evs.forEach(ev=>eraseAt(pos(ev))); return; }
+    evs.forEach(ev=>cur.points.push(pos(ev)));
+    redraw();
+  });
+  function endStroke(){ if(!drawing) return; drawing=false; cur=null; if(tool!=='laser') persist(); }
+  canvas.addEventListener('pointerup',endStroke);
+  canvas.addEventListener('pointercancel',endStroke);
+
+  /* ---- public actions ---- */
+  window.annoUndo=function(){ const a=strokes(); if(a.length){ a.pop(); redraw(); persist(); } };
+  function clearSlide(){ store[i]=[]; redraw(); persist(); }
+
+  /* collapse (dock visibility) is independent of draw mode */
+  let collapsed=true;
+  function expandDock(){ collapsed=false; document.body.classList.add('draw-on'); syncDock(); }
+  function collapseDock(keepDraw){ collapsed=true; if(!keepDraw) document.body.classList.remove('draw-on'); syncDock(); }
+  window.annoToggle=function(){ collapsed ? expandDock() : collapseDock(false); };
+
+  /* ---- build dock UI ---- */
+  const dock=document.getElementById('annoDock');
+  function mk(tag,cls,html){ const el=document.createElement(tag); if(cls)el.className=cls; if(html!=null)el.innerHTML=html; return el; }
+
+  /* drag grip — reposition the dock anywhere; stays visible when collapsed */
+  const grip=mk('div','adk-grip','⠿'); grip.title='Drag to move';
+  dock.appendChild(grip);
+  (function(){
+    let dx=0,dy=0,moved=false;
+    function down(e){
+      e.preventDefault(); moved=true;
+      const r=dock.getBoundingClientRect();
+      dx=e.clientX-r.left; dy=e.clientY-r.top;
+      dock.style.transform='none';
+      dock.style.right='auto';
+      dock.style.left=r.left+'px'; dock.style.top=r.top+'px';
+      grip.setPointerCapture(e.pointerId);
+      window.addEventListener('pointermove',move);
+      window.addEventListener('pointerup',up);
+    }
+    function move(e){
+      const w=dock.offsetWidth, h=dock.offsetHeight;
+      let x=e.clientX-dx, y=e.clientY-dy;
+      x=Math.max(4,Math.min(window.innerWidth -w-4, x));
+      y=Math.max(4,Math.min(window.innerHeight-h-4, y));
+      dock.style.left=x+'px'; dock.style.top=y+'px';
+    }
+    function up(){ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); }
+    grip.addEventListener('pointerdown',down);
+  })();
+
+  const master=mk('div','adk adk-master','✎'); master.title='Draw (D)';
+  master.onclick=window.annoToggle;
+  dock.appendChild(master);
+  dock.appendChild(mk('div','adk-sep'));
+
+  const toolsWrap=mk('div','adk-tools');
+  dock.appendChild(toolsWrap);
+
+  const TOOLS=[['pen','✏︎','Pen'],['hi','▰','Highlighter'],['laser','◉','Laser pointer'],['eraser','⌫','Eraser']];
+  const toolBtns={};
+  TOOLS.forEach(([id,gly,tt])=>{
+    const b=mk('div','adk',gly); b.title=tt;
+    b.onclick=()=>{ tool=id; syncDock(); };
+    toolBtns[id]=b; toolsWrap.appendChild(b);
+  });
+
+  toolsWrap.appendChild(mk('div','adk-lbl','color'));
+  const swWrap=mk('div','adk-row'); swWrap.style.cssText='flex-wrap:wrap;width:44px';
+  const swEls=[];
+  PALETTE.forEach(c=>{
+    const s=mk('div','adk-sw'); s.style.background=c;
+    s.onclick=()=>{ color=c; syncDock(); };
+    swEls.push([s,c]); swWrap.appendChild(s);
+  });
+  toolsWrap.appendChild(swWrap);
+
+  toolsWrap.appendChild(mk('div','adk-lbl','size'));
+  const wWrap=mk('div','adk-row');
+  const wEls=[];
+  WIDTHS.forEach((w,idx)=>{
+    const b=mk('div','adk-w'); const d=8+idx*6;
+    b.innerHTML=`<i style="width:${d}px;height:${d}px"></i>`;
+    b.onclick=()=>{ width=w; syncDock(); };
+    wEls.push([b,w]); wWrap.appendChild(b);
+  });
+  toolsWrap.appendChild(wWrap);
+
+  toolsWrap.appendChild(mk('div','adk-sep'));
+  const actRow=mk('div','adk-row');
+  const undoB=mk('div','adk','↶'); undoB.title='Undo (Z)'; undoB.onclick=window.annoUndo;
+  const clearB=mk('div','adk','🗑'); clearB.title='Clear this slide'; clearB.onclick=clearSlide;
+  actRow.appendChild(undoB); actRow.appendChild(clearB);
+  toolsWrap.appendChild(actRow);
+
+  /* hide the toolbar but stay in draw mode (slide fully visible, pen still active) */
+  const hideB=mk('div','adk','›'); hideB.title='Hide tools, keep drawing';
+  hideB.style.width='44px';
+  hideB.onclick=()=>collapseDock(true);
+  toolsWrap.appendChild(hideB);
+
+  function syncDock(){
+    const on=document.body.classList.contains('draw-on');
+    dock.classList.toggle('collapsed', collapsed);   /* collapsed → just the ✎ button, no slide coverage */
+    master.classList.toggle('on',on);
+    master.innerHTML = collapsed ? '✎' : '✕';
+    master.title = collapsed ? 'Open tools (D)' : 'Close tools (D)';
+    Object.entries(toolBtns).forEach(([id,b])=>b.classList.toggle('on',id===tool));
+    swEls.forEach(([s,c])=>s.classList.toggle('on',c===color));
+    wEls.forEach(([b,w])=>b.classList.toggle('on',w===width));
+  }
+  syncDock();
+
+  window.addEventListener('resize',resize);
+  if(window.visualViewport) window.visualViewport.addEventListener('resize',resize);
+  document.addEventListener('fullscreenchange',()=>setTimeout(resize,60));
+  resize();
+})();
+
+go(0);
+</script>
+</body>
+</html>

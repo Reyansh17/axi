@@ -1,0 +1,9 @@
+# Allowlist: only the deck + deploy config are tracked.
+# Everything else (source .docx/.pptx, backups, build script, logo,
+# screenshots, temp ~$ files, OS cruft) stays private.
+*
+
+!AXI_Module1_Slides.html
+!vercel.json
+!.vercelignore
+!.gitignore
