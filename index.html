@@ -571,8 +571,7 @@ body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
         <p class="lead" data-anim style="--d:3">The high-performance on-chip bus that moves data inside every modern SoC — from first principles.</p>
         <div class="title-meta" data-anim style="--d:4">
           <span class="chip lvl">● Level 1 · Easy</span>
-          <span class="chip">Arm AMBA · AXI</span>
-          <span class="chip">Spec ref: IHI0022L · Chapter A1</span>
+          <span class="chip">AMBA · AXI</span>
         </div>
       </div>
     </section>
@@ -630,12 +629,12 @@ body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
 
     <!-- ============ 4 · WHAT IS AXI ============ -->
     <section class="slide">
-      <template class="snote">AXI — <strong>Advanced eXtensible Interface.</strong> Say it once, then forget the long name. What matters: it's Arm's high-performance bus, part of the <strong>AMBA</strong> family, and it's the language blocks inside a chip use to talk. <em>Notice the spec's own words — "Manager" and "Subordinate," not "Master" and "Slave."</em> That's not just politics, it's a version tell. If someone says "Master," they're reading a spec from before 2021. We'll come back to that.<span class="cue">Read the quote in a slightly different voice — it's Arm talking.</span></template>
+      <template class="snote">AXI — <strong>Advanced eXtensible Interface.</strong> Say it once, then forget the long name. What matters: it's a high-performance bus, part of the <strong>AMBA</strong> family, and it's the language blocks inside a chip use to talk. <em>Notice the careful wording — "Manager" and "Subordinate," not "Master" and "Slave."</em> That's not just politics, it's a version tell. If someone says "Master," they're reading a spec from before 2021. We'll come back to that.<span class="cue">Read the quote in a slightly different voice.</span></template>
       <div class="section-tag">01 · About AXI</div>
       <div class="kicker" data-anim style="--d:0">The definition</div>
       <h2 data-anim style="--d:1" style="margin-top:.8vw">AXI = <span class="accent">A</span>dvanced e<span class="accent">X</span>tensible <span class="accent">I</span>nterface</h2>
       <p class="lead" data-anim style="--d:2" style="margin-top:1.4vw;max-width:64%">
-        Arm's high-performance on-chip bus protocol, part of the <strong>AMBA</strong> family.
+        A high-performance on-chip bus protocol, part of the <strong>AMBA</strong> family.
         Designed from the ground up for one goal: let fast, complex SoCs move data efficiently
         without the bottlenecks of older buses like <strong>AHB</strong> or <strong>APB</strong>.
       </p>
@@ -644,7 +643,7 @@ body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
         <div>
           The AXI protocol supports high-performance, high-frequency system designs for
           communication between <strong>Manager</strong> and <strong>Subordinate</strong> components.
-          <span class="quote-src">— IHI0022L §A1.1</span>
+          <span class="quote-src">— AMBA AXI</span>
         </div>
       </div>
     </section>
@@ -706,7 +705,7 @@ body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
         </div>
       </div>
       <div class="note" data-anim style="--d:6">
-        <strong>Terminology:</strong> Arm replaced Master→Manager and Slave→Subordinate in <span class="mono">IHI0022J</span> (2021) for inclusivity. “Master” now signals an older spec version.
+        <strong>Terminology:</strong> Master→Manager and Slave→Subordinate were renamed in <span class="mono">2021</span> for inclusivity. “Master” now signals an older protocol version.
       </div>
     </section>
 
@@ -714,7 +713,7 @@ body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
     <section class="slide">
       <template class="snote">Don't try to memorize this list — that's the wrong instinct. <em>Every single feature here is just AXI solving a real headache someone actually had.</em> Separate phases? That's the latency fix we just saw. Byte strobes? So a compiler can write two bytes in the middle of a word without touching the rest. Bursts, multiple outstanding, out-of-order — all about keeping that data channel busy. <strong>The one I want you to remember is the last one: WSTRB, one bit per byte.</strong> A 64-bit bus has 8 strobe bits, and you can light up any combination. We'll see why that matters constantly.<span class="cue">Don't read all eight. Pick 2–3, point, move on.</span></template>
       <div class="section-tag">01 · About AXI</div>
-      <div class="kicker" data-anim style="--d:0">IHI0022L §A1.1</div>
+      <div class="kicker" data-anim style="--d:0">Built for performance</div>
       <h2 data-anim style="--d:1" style="margin-top:.4vw">Key features — each born of real need</h2>
       <div class="feat-grid">
         <div class="feat" data-anim style="--d:2"><span class="feat-i">⇄</span><div><b>Separate address / data phases</b><p>enables pipelining &amp; latency hiding</p></div></div>
@@ -899,7 +898,7 @@ body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
     <section class="slide">
       <template class="snote">Real chips have lots of Managers and lots of Subordinates, and something has to sit in the middle routing traffic — that's the <strong>interconnect</strong>. The beautiful part: it uses the exact same AXI interface on both sides, so everything plugs together uniformly. You get three flavors. <strong>Shared</strong> everything — cheap, small, slow. <strong>Shared address but multiple data paths</strong> — the sweet spot, because address traffic is tiny compared to data. And <strong>multilayer</strong> — everything parallel, maximum throughput, what you'd find in a high-end SoC. <em>Watch the throughput bars climb as area and complexity climb too — there's always a trade.</em><span class="cue">Sweep across the three meters left to right.</span></template>
       <div class="section-tag">02 · Architecture</div>
-      <div class="kicker" data-anim style="--d:0">IHI0022L §A1.2.1</div>
+      <div class="kicker" data-anim style="--d:0">Connecting the fabric</div>
       <h2 data-anim style="--d:1" style="margin-top:.3vw">Interconnect topologies</h2>
       <p data-anim style="--d:2" style="margin-top:.4vw">Many Managers + Subordinates connect through a fabric. The same AXI interface definition is reused uniformly — the interconnect just exposes a Subordinate face to each Manager and a Manager face to each Subordinate.</p>
       <div class="topo-grid">
@@ -1053,7 +1052,7 @@ body:not(.draw-on) #annoDock .adk-tools{ opacity:.4; pointer-events:none; }
           <div class="rule-row bad2"><span class="rule-ic">=</span><div><b>Same ID</b><p>must complete in issue order — software enforces ordering</p></div></div>
           <div class="quote mini">
             “The AXI protocol supports multiple outstanding transactions and out-of-order completion.”
-            <span class="quote-src">— IHI0022L §A1.2</span>
+            <span class="quote-src">— AMBA AXI</span>
           </div>
         </div>
       </div>
@@ -1122,7 +1121,7 @@ const deck   = document.getElementById('deck');
      e:'False. AW and W have completely independent VALID/READY handshakes. AXI explicitly permits the address ahead of the data, and write data is always treated as buffered — so the Subordinate can even accept data before the address arrives.'},
     {d:'Easy',q:'What is the correct term for the component that <span class="mono">initiates</span> AXI transactions?',
      o:['Master','Initiator','Manager','Controller'],c:2,
-     e:'Since IHI0022J (2021), Arm replaced “Master” with <b>Manager</b> and “Slave” with “Subordinate”. Using “Master” now refers to older spec versions (AXI4 and earlier).'},
+     e:'Since <b>2021</b>, “Master” was renamed <b>Manager</b> and “Slave” became “Subordinate”. Using “Master” now refers to older protocol versions (AXI4 and earlier).'},
     {d:'Easy',q:'How many channels does a complete AXI <span class="mono">write</span> transaction use?',
      o:['1 — a single bidirectional channel','2 — AW and W','3 — AW, W and B','5 — all AXI channels'],c:2,
      e:'A write uses <b>AW</b> (address), <b>W</b> (data) and <b>B</b> (response). AR and R are read-only. Write data is treated as buffered — the Manager may send it before receiving B.'},
